@@ -2,56 +2,160 @@
 
 ## Trust boundaries
 
-1. **Workspace root** is the smallest authorization boundary. One bridge serves
-   exactly one workspace; every token is bound to `workspace_id`; a token for
-   project A returns 403 on project B's bridge.
-2. **Workspace content is untrusted.** README, comments, diffs may contain
-   prompt injection. Every MCP tool description carries an explicit warning and
-   tools never grant capabilities based on file content.
-3. **The model never sees long-lived credentials.** Computer Use only ever
-   handles the one-time pairing code. Access/refresh tokens travel only inside
-   the OAuth redirect/token endpoints between ChatGPT's client and the bridge.
+1. **Repository workspace root is the smallest authorization boundary.** One bridge
+   serves exactly one repository workspace; every access/refresh token is bound to
+   `workspace_id`; a token for repository A returns 403 on repository B's bridge.
+   Do not connect a parent directory that contains multiple repositories as one
+   workspace.
+2. **Workspace content is untrusted.** README text, comments, diffs, search results
+   and command output may contain prompt injection. MCP stays read-only and returned
+   text passes through the shared outbound sanitizer.
+3. **Long-lived credentials are not exposed to ChatGPT as user-visible secrets.**
+   The in-app browser only needs the one-time pairing code during authorization.
+   Access/refresh tokens travel through OAuth endpoints and persisted token records
+   contain SHA-256 hashes rather than raw token values.
+4. **Local bridge identity and public liveness are separate.** Public `/health`
+   returns only `{ "service": "c2c-bridge", "status": "ok" }`. Workspace identity
+   is read only through loopback `/admin/info` with the random runtime admin token.
+5. **One machine uses one shared hardened checkout.** The C2C implementation is not
+   copied into application repositories. Each repository still has its own
+   workspace/OAuth-token/connector/ChatGPT-Project boundary.
 
 ## Threat model → mitigations
 
 | Threat | Mitigation |
 | --- | --- |
-| MCP URL leaks | URL alone is useless: every `/mcp` request requires a valid bearer token (401 without, 403 wrong workspace) |
-| Pairing code brute force | 8 chars from a 31-char CSPRNG alphabet (~40 bits), 5 attempts per session, per-IP rate limit (10/min), 5-minute TTL, one-time use, session destroyed on limit |
-| OAuth CSRF | `state` round-tripped verbatim; authorization requests are server-side records keyed by random ids |
-| Code interception | PKCE S256 mandatory (plain rejected); authorization codes are one-time, 5-minute TTL, bound to client + redirect URI |
-| Token theft | Opaque high-entropy tokens; stored only as SHA-256 hashes; access tokens live 1 h; refresh tokens rotate on every use (replay of the old one fails); revocation endpoint + `c2c unpair` |
-| Workspace traversal | `realpath` canonicalization of the deepest existing ancestor; containment check against the canonical root; case-insensitive comparison on macOS/Windows; rejects `..`, absolute escapes, backslash tricks, null bytes |
-| Symlink escape | Canonicalization resolves symlinks before the containment check (file and directory symlinks both covered by tests) |
-| Sensitive files | Deny-by-default patterns (.env*, keys, SSH, cloud creds, keychains…) enforced at resolve time — reads, listings, and search all pass through the same gate; `git diff` adds pathspec excludes; `.env.example` allowed |
-| Oversized file / diff DoS | read_file caps lines and bytes per response; git_diff paginates by byte offset with hard caps; search caps matches and file sizes |
-| Tunnel exposure | Bridge binds 127.0.0.1 only (refuses 0.0.0.0); the only public surface is HTTPS via the tunnel, protected by OAuth; `/health` reveals only a salted workspace hash |
-| Admin API abuse | Loopback-only + random admin token (0600 runtime file) + requests with proxy headers (`cf-connecting-ip`, `x-forwarded-for`) rejected; unauthenticated probes get 404 |
-| Log credential leakage | Logger redacts token prefixes, bearer headers, token-like parameters, and pairing-code-shaped strings before writing |
-| Execution output leak | Codex may nominate test/build/lint logs; a local sanitizer redacts tokens, pairing-code-shaped strings and home paths, truncates size, and refuses private-key blocks entirely. Restricted items are listed without a body. ChatGPT still cannot run commands. |
-| Checkpoint / resume dump | Session checkpoints store short protocol fields only (capped). Resume uses the existing chat or HANDOFF — no new protocol state, no log paste, no re-pairing. |
+| MCP URL leaks | URL alone is insufficient: every `/mcp` request requires a valid bearer token (401 without, 403 for a token bound to another workspace) |
+| Pairing-code brute force | CSPRNG code, short TTL, attempt cap, one-time use and fixed-window rate limiting keyed by the hardened client-IP derivation |
+| Spoofed client IP | A single syntactically valid `CF-Connecting-IP` may be used; `X-Forwarded-For` is never trusted; otherwise `socket.remoteAddress` is used |
+| OAuth privilege escalation | Missing scope uses the documented default; supported-only requests receive exactly the requested subset; any unknown scope returns OAuth `invalid_scope` |
+| OAuth registration state exhaustion | Registered clients, redirect URI count/length and pending authorization requests are bounded; `/oauth/register` also has a fixed-window per-client-IP rate limit |
+| OAuth CSRF | `state` is round-tripped; authorization requests are server-side records keyed by random ids |
+| Code interception | PKCE S256 is mandatory; authorization codes are one-time, short-lived and bound to client + redirect URI |
+| Token theft | Opaque high-entropy tokens; persisted records contain SHA-256 hashes; access tokens expire; refresh tokens rotate on every use; old refresh-token replay fails; revocation is supported |
+| Workspace traversal | Canonical realpath containment rejects absolute escape, `..`, null bytes and platform-specific path tricks |
+| Symlink escape | Canonicalization resolves symlinks before containment checks for files and directories |
+| Sensitive files | Resolve/list/search/git-diff boundaries deny `.env*` (except `.env.example`), key material, SSH/cloud credentials, Docker/Kubernetes configs, Azure/gcloud state, `.pypirc`, Terraform state/vars, mobile provisioning files and other configured sensitive paths |
+| Regex ReDoS in Node fallback | Node fallback performs literal search only. Regex requires ripgrep; without a working ripgrep engine the request fails with `REGEX_ENGINE_UNAVAILABLE` |
+| Outbound secret leakage | `read_file`, search matches, `git_diff` and execution output share the same outbound sanitizer for recognized GitHub/OpenAI/Slack/AWS/Google credentials, common secret assignments, C2C secrets and home paths |
+| Private-key leakage | Any returned text containing a `-----BEGIN ... PRIVATE KEY-----` block fails closed; the private-key body is not returned |
+| Oversized file / diff DoS | `read_file` caps response size; `git_diff` paginates with hard byte caps; search caps matches and file size |
+| Tunnel exposure | Bridge binds only to loopback; public exposure is via HTTPS tunnel. `/health` is anonymous and contains no workspace id, version or filesystem-derived data |
+| Admin API abuse | Admin API is loopback-only + random admin token stored in a restricted runtime file; requests carrying proxy headers are rejected; unauthenticated requests receive 404 |
+| Public exception leakage | Unhandled parser/route errors return generic JSON and do not echo stack traces, filesystem paths or raw exception text |
+| Log credential leakage | Logger sanitization redacts C2C bearer/pairing secrets and recognized outbound secret forms before writing |
+| Execution output leak | Codex may nominate test/build/lint/typecheck output; the shared sanitizer redacts recognized secrets, truncates output and refuses private-key blocks. Restricted items expose metadata only. ChatGPT cannot execute commands |
+| Unattended supply-chain update | Normal update checks report only. No automatic pull/install/build/restart and no automatic stash/reset. An explicit update request must inspect candidate diffs/dependencies and pass frozen install + test + typecheck + build before fast-forwarding |
+| Prompt injection to mutation | MCP exposes no write/delete/shell/execute/commit/package-install/arbitrary-network tool, so workspace text cannot grant those capabilities |
 
-## Token & scope design
+## OAuth bounds
 
-Scopes: `workspace.read`, `workspace.search`, `git.read`, `execution.read`,
-`offline_access`. Tools enforce scopes individually (`INSUFFICIENT_SCOPE`).
-Access tokens: 1 hour. Refresh tokens: 30 days, rotated. All tokens bound to
-`workspace_id` and `client_id`.
+Current hardening baseline:
+
+- `MAX_REGISTERED_CLIENTS = 32`
+- `MAX_REDIRECT_URIS = 8`
+- `MAX_REDIRECT_URI_LENGTH = 2048`
+- `MAX_PENDING_AUTH_REQUESTS = 64`
+- Dynamic registration rate limit: fixed-window, per derived client IP
+
+Scopes:
+
+- `workspace.read`
+- `workspace.search`
+- `git.read`
+- `execution.read`
+- `offline_access`
+
+Tool handlers enforce scopes individually with `INSUFFICIENT_SCOPE`.
+
+## Public health vs local identity
+
+Public liveness:
+
+```json
+{
+  "service": "c2c-bridge",
+  "status": "ok"
+}
+```
+
+It intentionally contains no `workspaceId`, version, workspace name/root or
+filesystem-derived information.
+
+Daemon reuse and stop decisions do **not** infer workspace identity from public
+health. The local runtime record contains the workspace id, process information,
+port and random admin token. C2C first checks liveness, then calls loopback
+`/admin/info` with that admin token and accepts the bridge only when the returned
+workspace id matches the requested workspace.
+
+## Sensitive outbound content
+
+The shared outbound sanitizer is a final text boundary for MCP data. It is applied
+at the MCP structured-output boundary, so `read_file`, search results, git diffs and
+execution output cannot bypass it merely because they originate from different
+modules.
+
+Recognized secret categories include:
+
+- GitHub personal/access tokens
+- OpenAI API keys
+- Slack tokens
+- AWS access key IDs
+- Google API keys
+- common assignments such as `api_key`, `secret`, `password`, `passwd`,
+  `authorization` and `token`
+- C2C bearer/pairing secrets
+- home-directory usernames/paths
+
+Private-key material is stricter than redaction: the entire outbound response is
+withheld with a safe error rather than returning a partially redacted key block.
 
 ## Storage
 
-State lives under the OS-convention app dir
-(`~/Library/Application Support/codex-with-chatgpt` on macOS), directories 0700,
-files 0600. Named-hostname preference and tunnel metadata live there too
-(`tunnels/<workspaceId>.json`) — never in the project. Only SHA-256 hashes of
-tokens are persisted — a stolen state file does not yield usable bearer tokens.
+State lives under the OS-convention app directory
+(`~/Library/Application Support/codex-with-chatgpt` on macOS and
+`%LOCALAPPDATA%\codex-with-chatgpt` on Windows), not inside application
+repositories. Named-hostname preference and tunnel metadata also live in that
+state directory.
 
-**V1 limitation**: client registrations and token hashes are file-based rather
-than OS-keychain-based. Raw tokens are never written anywhere. Keychain
-integration is a V2 item.
+Persisted OAuth access/refresh records store token hashes, not raw bearer token
+values. The runtime admin token is local process-control material and is kept in a
+restricted runtime state file.
 
-## What ChatGPT can never do (V1)
+## What ChatGPT can never do through C2C MCP
 
-Write files, delete files, run shell commands, commit, install packages —
-these tools do not exist on the server, so no prompt injection, scope bug, or
-UI confusion can enable them.
+The MCP server intentionally does not register tools for:
+
+- writing files
+- deleting files
+- running shell commands
+- arbitrary command execution
+- committing Git changes
+- installing packages
+- arbitrary outbound network requests
+
+These capabilities are reserved to Codex's execution harness and are not part of
+the ChatGPT MCP surface.
+
+## Update trust boundary
+
+Normal `c2c update-check` is informational. The installed verified checkout remains
+unchanged even when a newer candidate exists.
+
+Only an explicit user request to update may enter the hardened update workflow.
+That workflow must:
+
+1. stop when the shared checkout is dirty;
+2. never automatically stash/reset/discard local changes;
+3. inspect candidate commits, overall diff and dependency diff;
+4. validate the candidate in an isolated worktree with
+   `corepack pnpm install --frozen-lockfile`, test, typecheck and build;
+5. fast-forward only after validation;
+6. repeat the same verification on the updated checkout;
+7. install the Skill under `~/.agents/skills/codex-with-chatgpt/SKILL.md`
+   (Windows: `%USERPROFILE%\.agents\skills\codex-with-chatgpt\SKILL.md`) only
+   after the verified update.
+
+A hardening commit is not considered verified solely because these controls exist
+in source. Deployment still requires the prescribed fresh validation on the exact
+candidate commit.
