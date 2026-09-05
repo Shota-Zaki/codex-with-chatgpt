@@ -30,12 +30,12 @@ describe("port collision handling", () => {
     expect(bridgeB.port).not.toBe(preferred);
     expect(bridgeB.port).toBeGreaterThan(0);
 
-    // health identifies each bridge's workspace, so callers can detect reuse
+    // Public health is intentionally anonymous; workspace identity is checked
+    // separately through the authenticated local admin probe.
     const healthA = await probeBridge(bridgeA.port);
     const healthB = await probeBridge(bridgeB.port);
-    expect(healthA?.workspaceId).toBe(bridgeA.workspace.id);
-    expect(healthB?.workspaceId).toBe(bridgeB.workspace.id);
-    expect(healthA?.workspaceId).not.toBe(healthB?.workspaceId);
+    expect(healthA).toEqual({ service: "c2c-bridge", status: "ok" });
+    expect(healthB).toEqual({ service: "c2c-bridge", status: "ok" });
 
     await bridgeA.close();
     await bridgeB.close();
