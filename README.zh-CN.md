@@ -2,57 +2,75 @@
 
 [English](README.md) | **简体中文**
 
-> ChatGPT 负责思考，Codex 负责干活。
+> ChatGPT 负责思考，Codex 负责执行。
 
 ## 解决什么问题
 
-ChatGPT 付费订阅的网页版额度大量闲置，Codex 却在消耗紧张的 API 额度做
-规划和 Review。本项目把"思考"交给你已付费的网页版 ChatGPT，Codex 只负责
-执行。不用 API Key、不搞逆向代理——官方网页 + 只读 MCP 桥接。
+把 ChatGPT 网页版作为 Codex 编码会话的规划与审查层，同时把所有执行权保留在
+Codex。仓库不会整体上传；ChatGPT 通过 OAuth 保护的**只读** MCP 连接按需读取
+当前仓库所需的文件、搜索结果、Git diff 和已释放的执行结果。
 
-## 这是什么
+这是 `Shota-Zaki/codex-with-chatgpt` 的安全强化 fork。不要直接把原始 upstream
+作为日常正本，也不要把 C2C 本体复制进每个业务仓库。
 
-把 ChatGPT 网页版变成 Codex 编码会话的"规划与审查大脑"，而执行权完全保留在
-Codex 手里。你的仓库永远不会被上传——ChatGPT 通过一条安全的、OAuth 保护的
-**只读** MCP 连接，按需读取当前工作区里它真正需要的那几行代码。
+## 一段话安装（推荐）
 
-## 一段话安装（纯小白专用）
-
-不懂 git、Node、终端？完全不需要懂。把下面这段话原样复制给你的编码
-Agent（Codex），然后去倒杯咖啡：
+把下面内容交给 Codex：
 
 ```text
-请帮我完整安装并配置 Codex with ChatGPT，全程自动，我是不懂技术的小白，
-所有事情你自己做：
+请安装并配置我的 Hardened Codex with ChatGPT fork，并自行完成技术步骤：
 
-1. 环境自检：需要 git 和 Node.js ≥ 20，缺什么就自动安装
-  （macOS 用 Homebrew，Windows 用 winget），同时安装 cloudflared。
-2. 下载：把 https://github.com/XiaoDuoYa/codex-with-chatgpt 克隆到
-   ~/codex-with-chatgpt（已存在就 git pull 更新）。
-3. 构建：在该目录里执行 corepack pnpm install 和 corepack pnpm build。
-4. 安装 Skill：把仓库里的 skill/SKILL.md 复制到
-   ~/.codex/skills/codex-with-chatgpt/SKILL.md，并把文件中
-   "The codex-with-chatgpt checkout lives at:" 那一行的路径改成实际克隆路径。
-5. 首次配置：按 SKILL.md 里的 first-time setup 流程执行
-  （运行 c2c setup，用内置浏览器打开 ChatGPT 配置连接器并输入配对码）。
-   全程只用内置浏览器，禁止打开任何第三方浏览器。
-6. 只有遇到需要我登录（ChatGPT / Cloudflare）、验证码或两步验证时才叫我，
-   而且一次只告诉我一个动作。
-7. 完成后给我看 ✓ 清单，并确认文件读取测试通过。我不懂 MCP、OAuth、
-   Tunnel、端口这些词，不要向我解释；出了问题先自己修。
+1. 检查 git 和 Node.js >= 20；缺少时再安装，并在需要公网连接时安装 cloudflared。
+2. 这台电脑只保留一个共享的 hardened checkout。不存在时从
+   https://github.com/Shota-Zaki/codex-with-chatgpt 克隆到
+   ~/codex-with-chatgpt；已经存在时不要自动 pull、reset、stash 或更新。
+   除非我明确说“Codex with ChatGPTを更新して”，否则继续使用当前已验证 commit。
+3. 在共享 checkout 中执行：
+   corepack pnpm install --frozen-lockfile
+   corepack pnpm build
+4. 把 skill/SKILL.md 安装到
+   ~/.agents/skills/codex-with-chatgpt/SKILL.md
+   Windows 使用：
+   %USERPROFILE%\.agents\skills\codex-with-chatgpt\SKILL.md
+   并把 Skill 中的 checkout 占位路径替换为这个共享 checkout 的真实路径。
+5. 每次只为一个仓库建立一个 workspace。绝对不要把包含多个仓库的父目录作为
+   一个 workspace 连接。
+6. 每个仓库分别使用自己的 workspace、OAuth/token 状态、ChatGPT connector
+   和 ChatGPT Project；禁止跨仓库复用认证边界。
+7. 按 SKILL.md 的 first-time setup 流程配置。只有登录、验证码、2FA、明确同意
+   或 Skill 定义的手动配置步骤需要我操作时，再一次告诉我一个动作。
+8. 完成后给我看状态清单，并确认文件读取测试。
 ```
 
-**更新**：Skill 每天自动检查一次 GitHub，有新版本会自动更新并继续任务，
-无需任何操作；也可以随时对 Codex 说"更新 Codex with ChatGPT"。
+## 更新策略
+
+正常的 `update-check` **只检查并报告更新候选，不自动更新**。发现新版本时继续
+使用当前已验证 commit。
+
+只有用户明确说 **「Codex with ChatGPTを更新して」** 时才进入更新流程：
+
+1. 检查 checkout 是否 dirty；dirty 就停止，禁止自动 stash/reset/覆盖。
+2. fetch 后先检查候选 commit、diff 和依赖变化。
+3. 在临时 detached worktree 中执行：
+   `corepack pnpm install --frozen-lockfile` → `test` → `typecheck` → `build`。
+4. 全部成功后才允许 fast-forward 共享 checkout，并在更新后的 checkout 上再次
+   运行同样验证。
+5. 验证后再更新 `~/.agents/skills/codex-with-chatgpt/SKILL.md`。
 
 ## 安装 → 配置 → 使用（手动版）
 
-1. 安装 Codex Skill：把 `skill/` 复制到 `~/.codex/skills/codex-with-chatgpt/`。
-2. 对 Codex 说：**"使用 Codex with ChatGPT 完成首次配置。"**
-3. 之后正常使用：**"使用 Codex with ChatGPT，帮我实现 XXX。"**
+1. 电脑上只保留一个 `Shota-Zaki/codex-with-chatgpt` hardened checkout。
+2. 复制 `skill/SKILL.md` 到
+   `~/.agents/skills/codex-with-chatgpt/SKILL.md`；Windows 为
+   `%USERPROFILE%\.agents\skills\codex-with-chatgpt\SKILL.md`。
+3. 把 Skill 中的 checkout 路径写成上面的共享 checkout。
+4. 在目标仓库里告诉 Codex：**「使用 Codex with ChatGPT 完成首次配置。」**
+5. 之后正常说：**「使用 Codex with ChatGPT，帮我实现 XXX。」**
 
-说明书到此结束。你不需要知道 MCP、OAuth、Tunnel、端口、localhost 是什么——
-Codex 会自动完成所有配置，你只会看到：
+不要在每个仓库里复制一份 C2C。仓库 A 与仓库 B 必须分别拥有自己的 Workspace、
+OAuth/token、connector 和 ChatGPT Project。
+
+成功后的用户可见状态应类似：
 
 ```
 Codex with ChatGPT
@@ -66,16 +84,6 @@ Codex with ChatGPT
 Ready.
 ```
 
-唯一可能需要你动手的步骤：登录 ChatGPT（如果要用固定域名，再登录一次 Cloudflare）。**新仓库**还会请你在 ChatGPT 里建一次项目（合集）：名字用仓库名，记忆选「仅限项目记忆」。侧栏如果没有「项目」，把鼠标放在「聊天」上，点右边三个点，选「按项目整理」。之后对话都从合集页开，不用回首页。已经在用的仓库默认还是原来的一条长对话，除非你说要改成 Project。
-
-### 可选的固定域名
-
-默认公网地址是临时的，桥重启后会变。Codex 会删掉这个项目的 ChatGPT 插件再按新地址加回去。
-
-如果你有 Cloudflare 账号，并且域名已经加在 Cloudflare 上，首次配置时（老用户则在下一次编码时问一次）会问你要不要用固定域名，例如 `c2c-<项目>.你的域名`。选是的话，浏览器里授权一次 Cloudflare 即可。之后重启一般不用再改插件。没有账号、不想用、登录失败：继续用临时地址，功能一样，只是修复更慢。
-
-凭证放在系统目录，不进项目。
-
 ## 工作原理
 
 ```
@@ -84,88 +92,97 @@ Ready.
              │   推理 / 规划 / 审查      │
              └──────────┬──────────▲─────┘
                         │          │
-               MCP      │          │ Computer Use
-              数据面    │          │ 控制面（消息 < 1 KB）
+              只读 MCP  │          │ 内置浏览器控制消息
                         ▼          │
              ┌─────────────────────┐
-             │      C2C Bridge     │   仅监听本机回环地址
+             │      C2C Bridge     │   本机回环监听
              │  只读 MCP           │   OAuth 2.1 + 一次性配对码
-             │  OAuth + 配对       │   Cloudflare Quick Tunnel
-             │  Tunnel 管理        │
+             │  OAuth + Pairing    │   Cloudflare 连接
              └──────────┬──────────┘
                         │  只读
                         ▼
              ┌─────────────────────┐          ┌─────────────────────┐
-             │     本地工作区      │◀─────────│    Codex Harness    │
-             └─────────────────────┘ 编辑/git │  Shell / 测试 / 修复 │
+             │     单一仓库        │◀─────────│    Codex Harness    │
+             └─────────────────────┘ edit/git │ Shell / 测试 / 修复 │
                                               └─────────────────────┘
 ```
 
-- **控制面（Computer Use）**：Codex 与 ChatGPT 之间只交换极小的结构化 `[C2C]`
-  状态消息——`INIT → PLAN → EXECUTED → REVIEW → DONE`。绝不粘贴 diff、日志
-  或文件内容。
-- **数据面（MCP）**：ChatGPT 缺什么自己拉什么，共 9 个只读工具：
+- **控制面**：Codex 与 ChatGPT 只交换小型 `[C2C]` 状态消息，例如
+  `INIT → PLAN → EXECUTED → REVIEW → DONE`；不把文件、diff、日志直接粘贴到聊天。
+- **数据面**：ChatGPT 通过九个只读工具读取需要的信息：
   `workspace_info`、`list_directory`、`read_file`、`search_workspace`、
   `git_status`、`git_diff`、`test_status`、`execution_summary`、
   `execution_output`。
-- **独立审查**：Codex 执行完毕后，ChatGPT 通过 MCP 亲自检查真实的 git diff
-  和测试记录——绝不因为 Codex 说"测试全过"就直接相信。
+- **执行权**：写文件、删除、Shell、执行命令、commit、安装包、任意网络请求等
+  MCP 工具不存在，Codex 才负责执行。
 
-## 安全模型（简版）
+## Hardened 安全模型
 
-- **从构造上只读**：服务端根本不存在写文件/删除/Shell/提交类工具，任何提示
-  注入都无法启用它们。
-- **一个工作区 = 一道边界**：每个令牌绑定单一工作区；路径校验基于规范化
-  realpath（symlink、`../`、绝对路径逃逸全部被拦截并有测试覆盖）。
-- **敏感文件永不外泄**：`.env*`、密钥、SSH、各类凭据默认拒绝
-  （`.env.example` 放行）；`.c2cignore` 可追加自定义规则。
-- **知道 URL 不等于有权限**：公网 MCP 端点强制 OAuth 2.1（PKCE S256、动态
-  客户端注册、refresh token 轮换）。无令牌：401；令牌属于别的工作区：403。
-- **模型永远接触不到长期凭据**：唯一会出现在浏览器里的秘密是一次性配对码
-  （5 分钟有效、限 5 次尝试、限速、用后即毁）。
+- **永久只读 MCP**：ChatGPT 侧没有 write/delete/shell/execute/commit/install/
+  arbitrary-network 工具。
+- **一个仓库 = 一个认证边界**：workspace、OAuth/token、connector、ChatGPT
+  Project 分离，禁止多仓库父目录作为一个 workspace。
+- **OAuth scope fail closed**：未指定 scope 使用 documented default；全部为支持的
+  scope 时只授予请求子集；只要包含未知 scope 就返回 `invalid_scope`。
+- **注册有界**：OAuth client 数、redirect URI 数/长度、pending authorization 和
+  注册速率都有上限。
+- **Client IP 收敛**：只接受单个合法 `CF-Connecting-IP`；不信任
+  `X-Forwarded-For`；否则使用 socket remote address。
+- **公开 health 匿名**：`/health` 仅返回 service 与 status；workspace identity
+  通过本机 loopback + admin token 的内部接口确认。
+- **Regex fail closed**：Node fallback 仅支持 literal 搜索；regex 没有 ripgrep 时
+  返回 `REGEX_ENGINE_UNAVAILABLE`。
+- **敏感路径拒绝**：除了既有 `.env`、密钥、SSH/Cloud 凭证，还拒绝 Docker、
+  Kubernetes、Azure、gcloud、Terraform state/vars、mobileprovision 等；
+  `.env.example` 仍允许读取。
+- **统一 outbound sanitizer**：`read_file`、搜索结果、`git_diff`、执行结果在 MCP
+  出口统一脱敏。检测到 private-key block 时不返回正文，直接 fail closed。
+- **路径逃逸防护**：绝对路径、`../` 和 symlink escape 继续由 canonical realpath
+  边界拒绝。
+- **Token 隔离**：无 token 为 401；其他 workspace 的 token 为 403；refresh token
+  轮换；持久化 token 只保存 hash。
+- **禁止无人值守更新**：更新检查仅报告候选；显式更新也必须先验证候选。
 
 完整威胁模型：[docs/security.md](docs/security.md)
 
-## 开发者
+## 开发与最终验证
 
 ```bash
-pnpm install
-pnpm build          # 产出 dist/，暴露 c2c 命令
-pnpm test           # vitest：146 个测试（路径安全、OAuth、配对、MCP 端到端）
+corepack pnpm install --frozen-lockfile
+corepack pnpm test
+corepack pnpm typecheck
+corepack pnpm build
 
-c2c setup           # 一条命令：Bridge + 隧道 + 配对码
-c2c sandbox-allow   # 把本地设置目录加入 Codex 沙箱白名单（macOS / Windows）
-c2c status / doctor / pair / unpair / logs / stop
+git status
+git diff main...HEAD
 ```
 
-环境要求：Node.js >= 20、git；公网连接需要 `cloudflared`
-（自动检测，Skill 会替你安装）。
-
-文档：[架构](docs/architecture.md) · [协议](docs/protocol.md) ·
-[安全](docs/security.md) · [故障排查](docs/troubleshooting.md)
+安全强化分支仅仅“代码已经修改”不代表“验证完成”。部署前必须固定候选 commit，
+在该 commit 上执行上述 frozen install / test / typecheck / build，并确认全部 exit 0。
+完成独立审查前不要 merge 到 `main`。
 
 ## 目录结构
 
 ```
 src/
-  bridge/     本机回环 HTTP 服务、端口自动恢复、管理 API
-  mcp/        9 个只读工具、无状态 Streamable HTTP
-  auth/       OAuth 2.1（PKCE、动态注册、refresh 轮换、吊销）
-  pairing/    一次性配对码（CSPRNG、TTL、限速）
+  bridge/     本机回环 HTTP 服务、运行时身份、管理 API
+  mcp/        九个只读工具、统一 outbound 安全边界
+  auth/       OAuth 2.1、PKCE、DCR、scope、rate limit、token rotation
+  pairing/    一次性配对码与限速
   workspace/  路径收敛、敏感文件策略、搜索、git
-  tunnel/     TunnelProvider 抽象 + Cloudflare Quick Tunnel
-  execution/  审查闭环所需的执行记录
-  process/    守护进程生命周期
-  cli/        c2c 命令行
-skill/        Codex Skill（真正的 UX 层）
-tests/        单元 + 集成测试
-docs/         架构 / 协议 / 安全 / 故障排查
+  tunnel/     Cloudflare 连接实现
+  execution/  审查闭环使用的执行记录
+  process/    daemon 生命周期
+  cli/        c2c CLI
+skill/        用户 Skill UX 层
+tests/        单元与集成测试
+docs/         设计、安全、协议、故障排查文档
 ```
 
 ## 状态与声明
 
-V1。已端到端验证：Bridge、OAuth + 配对、公网隧道、ChatGPT 连接器配置、
-零操作首次配置体验。
+这是 Hardened Fork。当前 hardening commit 在完成规定的 fresh 验证前，不应被
+描述为“已验证”“安全”或“可合并”。
 
 **非官方社区项目，与 OpenAI 无关联，未获其背书。**
 
