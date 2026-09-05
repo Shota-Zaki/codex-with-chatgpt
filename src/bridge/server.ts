@@ -95,7 +95,6 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
   let publicBaseUrl: string | null = null;
 
   const app = express();
-  app.set("trust proxy", true);
   app.disable("x-powered-by");
 
   const getBaseUrl = (req: Request): string => {
@@ -105,10 +104,10 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
     return `${proto}://${hostHeader}`;
   };
 
-  // ---- Health (public but minimal) ---------------------------------------
+  // ---- Health (public and intentionally anonymous) -----------------------
 
   app.get("/health", (_req, res) => {
-    res.json({ service: SERVICE_NAME, version: VERSION, workspaceId: workspace.id, status: "ok" });
+    res.json({ service: SERVICE_NAME, status: "ok" });
   });
 
   // ---- OAuth + discovery ---------------------------------------------------
