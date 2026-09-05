@@ -25,6 +25,16 @@ export interface SearchResult {
   engine: "ripgrep" | "node";
 }
 
+export class SearchError extends Error {
+  constructor(
+    readonly code: "REGEX_ENGINE_UNAVAILABLE",
+    message: string
+  ) {
+    super(message);
+    this.name = "SearchError";
+  }
+}
+
 const RG_CANDIDATES = [
   "rg",
   "/opt/homebrew/bin/rg",
@@ -117,7 +127,6 @@ async function searchWithNode(
   opts: SearchOptions,
   limit: number
 ): Promise<SearchResult> {
-  const matcher = opts.regex ? new RegExp(opts.query, "i") : null;
   const needle = opts.query.toLowerCase();
   const globRegex = opts.glob ? globToRegex(opts.glob) : null;
   const matches: SearchMatch[] = [];
@@ -157,8 +166,7 @@ async function searchWithNode(
         const lines = content.split("\n");
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
-          const hit = matcher ? matcher.test(line) : line.toLowerCase().includes(needle);
-          if (hit) {
+          if (line.toLowerCase().includes(needle)) {
             matches.push({ path: childRel, line: i + 1, text: line.trimEnd().slice(0, 500) });
             if (matches.length >= limit) {
               truncated = true;
@@ -198,8 +206,20 @@ export async function searchWorkspace(ws: Workspace, opts: SearchOptions): Promi
     try {
       return await searchWithRipgrep(ws, rg, abs, opts, limit);
     } catch {
-      // fall through to node engine
+      if (opts.regex) {
+        throw new SearchError(
+          "REGEX_ENGINE_UNAVAILABLE",
+          "Regex search requires a working ripgrep engine."
+        );
+      }
+      // Literal search may fall back to the bounded Node implementation.
     }
+  }
+  if (opts.regex) {
+    throw new SearchError(
+      "REGEX_ENGINE_UNAVAILABLE",
+      "Regex search requires ripgrep and is unavailable in the Node fallback."
+    );
   }
   return searchWithNode(ws, abs, opts, limit);
 }
