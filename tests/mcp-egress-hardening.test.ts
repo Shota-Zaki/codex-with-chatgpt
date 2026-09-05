@@ -4,7 +4,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { startBridge, type Bridge } from "../src/bridge/server.js";
 import { resetRipgrepCache } from "../src/workspace/search.js";
-import { cleanup, git, isolateStateDir, makeGitRepo, makeTmpDir, write } from "./helpers.js";
+import { cleanup, isolateStateDir, makeGitRepo, makeTmpDir, write } from "./helpers.js";
 
 let root: string;
 let stateDir: string;
@@ -88,7 +88,7 @@ describe("MCP outbound secret boundary", () => {
 
   it("redacts recognized credentials from git_diff", async () => {
     const secret = "ghp_1234567890abcdefghijklmnopqrstuvwxyz";
-    write(root, "src/diff-secret.txt", `token=${secret}\n`);
+    write(root, "src/index.ts", `export const token = "${secret}";\n`);
 
     const result = await client.callTool({
       name: "git_diff",
