@@ -1,6 +1,14 @@
 import { Router, type Request, type Response, urlencoded, json } from "express";
 import { randomBytes } from "node:crypto";
-import { AuthStore, SUPPORTED_SCOPES, base64UrlSha256, filterScopes, safeEqual } from "./store.js";
+import {
+  AuthStore,
+  SUPPORTED_SCOPES,
+  base64UrlSha256,
+  parseRequestedScopes,
+  safeEqual,
+} from "./store.js";
+import { deriveClientIp } from "./client-ip.js";
+import { FixedWindowRateLimiter } from "./rate-limit.js";
 import { PairingManager } from "../pairing/manager.js";
 import type { Logger } from "../logger/index.js";
 import { PRODUCT_NAME } from "../version.js";
@@ -24,6 +32,13 @@ interface PendingAuthRequest {
   resource?: string;
   expiresAt: number;
 }
+
+const MAX_REGISTERED_CLIENTS = 32;
+const MAX_REDIRECT_URIS = 8;
+const MAX_REDIRECT_URI_LENGTH = 2048;
+const MAX_PENDING_AUTH_REQUESTS = 64;
+const REGISTRATION_RATE_LIMIT = 20;
+const REGISTRATION_RATE_WINDOW_MS = 60_000;
 
 function isAllowedRedirectUri(uri: string): boolean {
   let parsed: URL;
@@ -137,6 +152,10 @@ function pairingPage(opts: {
 export function createOAuthRouter(deps: OAuthDeps): Router {
   const router = Router();
   const pendingRequests = new Map<string, PendingAuthRequest>();
+  const registrationLimiter = new FixedWindowRateLimiter(
+    REGISTRATION_RATE_LIMIT,
+    REGISTRATION_RATE_WINDOW_MS
+  );
 
   const prunePending = (): void => {
     const now = Date.now();
@@ -162,18 +181,47 @@ export function createOAuthRouter(deps: OAuthDeps): Router {
   // ---- Dynamic Client Registration (RFC 7591) ------------------------------
 
   router.post("/oauth/register", json(), (req, res) => {
-    const body = req.body as { client_name?: string; redirect_uris?: unknown };
-    const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
-    if (
-      redirectUris.length === 0 ||
-      !redirectUris.every((uri) => typeof uri === "string" && isAllowedRedirectUri(uri))
-    ) {
-      res.status(400).json({
-        error: "invalid_redirect_uri",
-        error_description: "redirect_uris must be https URLs (or http://localhost for development)",
+    const rate = registrationLimiter.check(deriveClientIp(req));
+    if (!rate.allowed) {
+      res.setHeader("retry-after", Math.max(1, Math.ceil(rate.retryAfterMs / 1000)).toString());
+      res.status(429).json({
+        error: "rate_limited",
+        error_description: "Too many client registration requests. Try again later.",
       });
       return;
     }
+
+    const body = req.body as { client_name?: string; redirect_uris?: unknown };
+    const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
+    if (redirectUris.length === 0 || redirectUris.length > MAX_REDIRECT_URIS) {
+      res.status(400).json({
+        error: "invalid_client_metadata",
+        error_description: `redirect_uris must contain between 1 and ${MAX_REDIRECT_URIS} entries`,
+      });
+      return;
+    }
+    if (
+      !redirectUris.every(
+        (uri) =>
+          typeof uri === "string" &&
+          uri.length <= MAX_REDIRECT_URI_LENGTH &&
+          isAllowedRedirectUri(uri)
+      )
+    ) {
+      res.status(400).json({
+        error: "invalid_redirect_uri",
+        error_description: "redirect_uris must be valid https URLs (or http://localhost for development) within the allowed length",
+      });
+      return;
+    }
+    if (deps.store.clientCount() >= MAX_REGISTERED_CLIENTS) {
+      res.status(429).json({
+        error: "too_many_clients",
+        error_description: "This workspace has reached its OAuth client registration limit.",
+      });
+      return;
+    }
+
     const client = deps.store.registerClient({
       clientName: typeof body.client_name === "string" ? body.client_name.slice(0, 200) : undefined,
       redirectUris: redirectUris as string[],
@@ -221,12 +269,22 @@ export function createOAuthRouter(deps: OAuthDeps): Router {
       fail("invalid_request", "PKCE with S256 is required");
       return;
     }
-    const scopes = filterScopes(query.scope);
+
+    const parsedScopes = parseRequestedScopes(query.scope);
+    if (!parsedScopes.ok) {
+      fail("invalid_scope", "One or more requested scopes are unsupported");
+      return;
+    }
+    if (pendingRequests.size >= MAX_PENDING_AUTH_REQUESTS) {
+      fail("temporarily_unavailable", "Too many pending authorization requests. Try again later.");
+      return;
+    }
+
     const request: PendingAuthRequest = {
       id: randomBytes(16).toString("hex"),
       clientId: client.clientId,
       redirectUri,
-      scopes,
+      scopes: parsedScopes.scopes,
       state: query.state,
       codeChallenge: query.code_challenge,
       resource: query.resource,
@@ -237,7 +295,13 @@ export function createOAuthRouter(deps: OAuthDeps): Router {
     res
       .status(200)
       .type("html")
-      .send(pairingPage({ requestId: request.id, workspaceName: deps.workspaceName, scopes }));
+      .send(
+        pairingPage({
+          requestId: request.id,
+          workspaceName: deps.workspaceName,
+          scopes: request.scopes,
+        })
+      );
   });
 
   router.post("/oauth/authorize", urlencoded({ extended: false }), (req, res) => {
@@ -249,7 +313,7 @@ export function createOAuthRouter(deps: OAuthDeps): Router {
       res.status(400).send("This authorization request has expired. Please reconnect from ChatGPT.");
       return;
     }
-    const verdict = deps.pairing.verify(body.pairing_code ?? "", req.ip);
+    const verdict = deps.pairing.verify(body.pairing_code ?? "", deriveClientIp(req));
     if (!verdict.ok) {
       const messages: Record<string, string> = {
         invalid: `Incorrect pairing code.${verdict.attemptsLeft !== undefined ? ` ${verdict.attemptsLeft} attempts left.` : ""}`,
