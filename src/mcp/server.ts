@@ -2,10 +2,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { Workspace, WorkspaceError } from "../workspace/manager.js";
-import { searchWorkspace } from "../workspace/search.js";
+import { SearchError, searchWorkspace } from "../workspace/search.js";
 import { gitDiff, gitInfo, gitStatus, type DiffMode } from "../workspace/git.js";
 import { executionRecordSchema, latestExecutionRecord, readExecutionRecords } from "../execution/records.js";
 import { listExecutionOutputs, readExecutionOutput } from "../execution/output.js";
+import { sanitizeOutboundText } from "../security/outbound-sanitize.js";
 import type { Logger } from "../logger/index.js";
 import { PRODUCT_NAME, VERSION } from "../version.js";
 
@@ -19,12 +20,40 @@ type ToolResult = {
   isError?: boolean;
 };
 
-function ok(data: unknown): ToolResult {
-  return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+type SanitizedValueResult =
+  | { allowed: true; value: unknown }
+  | { allowed: false };
+
+function sanitizeOutboundValue(value: unknown): SanitizedValueResult {
+  if (typeof value === "string") {
+    const sanitized = sanitizeOutboundText(value);
+    return sanitized.allowed
+      ? { allowed: true, value: sanitized.text }
+      : { allowed: false };
+  }
+  if (Array.isArray(value)) {
+    const items: unknown[] = [];
+    for (const item of value) {
+      const sanitized = sanitizeOutboundValue(item);
+      if (!sanitized.allowed) return sanitized;
+      items.push(sanitized.value);
+    }
+    return { allowed: true, value: items };
+  }
+  if (value !== null && typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      const sanitized = sanitizeOutboundValue(item);
+      if (!sanitized.allowed) return sanitized;
+      result[key] = sanitized.value;
+    }
+    return { allowed: true, value: result };
+  }
+  return { allowed: true, value };
 }
 
-function okStructured<T extends object>(data: T): ToolResult {
-  return { ...ok(data), structuredContent: data as Record<string, unknown> };
+function ok(data: unknown): ToolResult {
+  return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
 }
 
 function fail(code: string, message: string): ToolResult {
@@ -34,9 +63,33 @@ function fail(code: string, message: string): ToolResult {
   };
 }
 
+function okStructured<T extends object>(data: T): ToolResult {
+  const sanitized = sanitizeOutboundValue(data);
+  if (!sanitized.allowed) {
+    return fail(
+      "SENSITIVE_CONTENT_RESTRICTED",
+      "Content was withheld by the outbound secret-safety policy."
+    );
+  }
+  const safe = sanitized.value as T;
+  return { ...ok(safe), structuredContent: safe as Record<string, unknown> };
+}
+
+function safeFailure(code: string, message: string): ToolResult {
+  const sanitized = sanitizeOutboundText(message);
+  if (!sanitized.allowed) {
+    return fail(
+      "SENSITIVE_CONTENT_RESTRICTED",
+      "Content was withheld by the outbound secret-safety policy."
+    );
+  }
+  return fail(code, sanitized.text);
+}
+
 function mapError(error: unknown): ToolResult {
-  if (error instanceof WorkspaceError) return fail(error.code, error.message);
-  return fail("INTERNAL_ERROR", error instanceof Error ? error.message : String(error));
+  if (error instanceof WorkspaceError) return safeFailure(error.code, error.message);
+  if (error instanceof SearchError) return safeFailure(error.code, error.message);
+  return fail("INTERNAL_ERROR", "Request failed.");
 }
 
 function requireScope(authInfo: AuthInfo | undefined, scope: string): ToolResult | null {
