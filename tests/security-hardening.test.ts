@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Request } from "express";
 import { startBridge } from "../src/bridge/server.js";
 import { deriveClientIp } from "../src/auth/client-ip.js";
@@ -21,7 +22,7 @@ afterEach(() => {
 
 describe("dependency and Skill hardening", () => {
   it("pins the reviewed MCP SDK and removes unattended update behavior", () => {
-    const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+    const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
     const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8")) as {
       dependencies: Record<string, string>;
     };
