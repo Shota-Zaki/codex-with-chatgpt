@@ -3,7 +3,7 @@ name: codex-with-chatgpt
 description: >
   Use ChatGPT (web) as the planning and review brain for Codex coding sessions,
   while Codex keeps full execution ownership. Use when the user says
-  "使用 Codex with ChatGPT ..." / "Set up Codex with ChatGPT" / "用 ChatGPT 规划",
+  "Codex with ChatGPTを使って ..." / "Codex with ChatGPTを初回設定して" / "ChatGPTで計画して",
   when they ask to connect ChatGPT to the current workspace, disconnect it,
   or run a task through the ChatGPT planning loop.
 ---
@@ -22,7 +22,7 @@ whatever data it needs by itself.
 
 1. NEVER paste file contents, diffs, or logs into ChatGPT. ChatGPT reads them through MCP.
 2. NEVER show the user technical internals (MCP, OAuth, PKCE, tunnel, ports, localhost).
-   Speak in terms of "连接 ChatGPT / 安全连接 / 配对". The only exception is the
+   Speak in terms of "ChatGPTへ接続 / 安全な接続 / ペアリング". The only exception is the
    **guided manual ChatGPT setup** below: expose only the exact settings
    field labels/values the user must enter, without explaining internals.
 3. The pairing code is the ONLY credential you may ever type into a browser.
@@ -55,10 +55,10 @@ whatever data it needs by itself.
      their own browser session — that single Cloudflare login step may go through
      their browser; everything else stays in the built-in browser.
    - If the user asks to run ChatGPT in their own browser, refuse politely and
-     explain: "Codex 需要持续调用 ChatGPT 和配置连接，这会频繁操作页面，可能影响
-     你浏览器的正常使用。ChatGPT 只能跑在内置浏览器里。" Only if the user replies
-     with an explicit "我愿意承担影响" may you proceed in their browser; otherwise
-     keep ChatGPT in the built-in browser, every time they ask.
+     explain: "CodexはChatGPTの呼び出しと接続設定のために継続的にページを操作する必要があり、
+     普段使っているブラウザへ影響する可能性があります。ChatGPTは内蔵ブラウザで実行します。"
+     Only if the user replies with an explicit "影響を受け入れます" may you proceed in
+     their browser; otherwise keep ChatGPT in the built-in browser, every time they ask.
 6. Conversation reuse depends on `c2c session --json` → `conversation.mode`
    (see Conversation management). Do not invent a second mode.
    - **long-chat** (legacy session file, or the user opted out): ONE ChatGPT
@@ -88,7 +88,7 @@ whatever data it needs by itself.
    - `chatgptRepair.needed` is true (fix the connector first, then doctor again)
    - `namedRepair.needed` is true (user must log in to Cloudflare, then doctor again.
      Do not Delete the ChatGPT connector — the address did not change)
-   - `report.bridge` says 状态无法确认: the local bridge may still be running.
+   - `report.bridge` says 状態を確認できません: the local bridge may still be running.
      Do not `c2c start`, do not Delete the connector, do not treat it as
      `chatgptRepair`. Wait and run doctor again.
    A ChatGPT-side 401 after a sent message is different: repair then, do not
@@ -128,11 +128,11 @@ that close the tab, hide the window, or stall on the settings page.
    marked (standby). Do not let default turn cleanup close it.
 
 4. **URLs only** (same tab, `goto` — never hunt menus):
-   - 开发人员模式: `https://chatgpt.com/#settings/Security`
+   - 開発者モード: `https://chatgpt.com/#settings/Security`
      (skip when `c2c prefs --json` has `developerModeEnabled: true`)
-   - 插件总管: `https://chatgpt.com/plugins`
-   - 加插件: `https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2Fplugins`
-   - 新对话 (long-chat only, and only if no saved chat): `https://chatgpt.com/`
+   - コネクタ一覧: `https://chatgpt.com/plugins`
+   - コネクタ追加: `https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2Fplugins`
+   - 新しいチャット (long-chat only, and only if no saved chat): `https://chatgpt.com/`
    - Saved C2C chat: `conversation.chatUrl` / `session.url` (long-chat, or
      the chat already bound in THIS Codex conversation)
    - Saved Project collection: `conversation.projectUrl`
@@ -140,7 +140,7 @@ that close the tab, hide the window, or stall on the settings page.
    Never click Reconnect / Refresh on an existing connector. The old address is
    dead and that page hangs on "This site cannot be reached". When the address
    changed: Delete THIS workspace's `connectorName` only, then create it again
-   via the 加插件 URL (same name, new Server URL). Do not put that public
+   via the コネクタ追加 URL (same name, new Server URL). Do not put that public
    address into Project instructions — write the connector **name** only.
 
 5. **Do not wait for 8 tools** on the settings page. "Connected" / authorize
@@ -151,7 +151,7 @@ that close the tab, hide the window, or stall on the settings page.
    After an action, one cheap DOM check. Do not screenshot-poll.
 
 7. **One conversation, Chat mode.** The first ChatGPT chat is the C2C
-   conversation. Chat and Work (聊天 / 工作) are separate: a Work conversation
+   conversation. Chat and Work (チャット / ワーク) are separate: a Work conversation
    cannot become Chat. On every NEW conversation, if a Chat/Work switcher is
    visible (often top-left), confirm **Chat** is selected before the boot
    prompt. If it is Work, do not continue there — Switch to a new Chat
@@ -207,7 +207,7 @@ commands (both are cheap / cached; never mention them unless an update exists):
   Continue the user's original task on the current verified commit. Tell the user:
   `Codex with ChatGPT に更新候補があります。現在は検証済みCommitのまま続行します。更新する場合は「Codex with ChatGPTを更新して」と指示してください。`
 
-## Workflow: explicit manual update（"Codex with ChatGPTを更新して" / "更新 Codex with ChatGPT"）
+## Workflow: explicit manual update（"Codex with ChatGPTを更新して"）
 
 Run this workflow ONLY after an explicit user update instruction. The normal daily
 update check must never enter this workflow automatically.
@@ -252,14 +252,14 @@ Inside the shared hardened checkout directory (see Locations):
 
 Ask this **before** the public address exists (`c2c setup` / first `doctor --fix`
 that starts a tunnel). Do not mention tunnels, wrangler, DNS, or hostnames.
-Speak only of 临时地址 / 固定域名 / 登录 Cloudflare.
+Speak only of 一時アドレス / 固定ドメイン / Cloudflareへのログイン.
 
 1. `c2c tunnel status -w <workspace> --json`
 2. If `needsChoice` is false: do not ask again.
 3. If `needsChoice` is true: tell the user exactly `userPrompt` and wait.
-   - 没有账号 / 没有域名 / 临时 / 不用 →
+   - アカウントなし / ドメインなし / 一時アドレス / 固定ドメイン不要 →
      `c2c tunnel choose -w <ws> --mode quick --json`
-   - 有域名（例如 example.com）→ first tell them `loginPrompt`, then
+   - ドメインあり（例: example.com）→ first tell them `loginPrompt`, then
      `c2c tunnel choose -w <ws> --mode named --zone <domain> --json`.
      This may open the user's own browser (the Cloudflare exception in
      Golden rule 5). Wait until the command finishes.
@@ -270,7 +270,7 @@ Speak only of 临时地址 / 固定域名 / 登录 Cloudflare.
 4. Never put connection credentials in the project. The CLI stores them in
    the C2C state directory.
 
-## Workflow: first-time setup（"使用 Codex with ChatGPT 完成首次配置"）
+## Workflow: first-time setup（"Codex with ChatGPTを使って、このRepositoryの初回設定をして"）
 
 1. Detect prerequisites yourself: `node --version` (>= 20), and check `cloudflared`.
    - If cloudflared is missing on macOS run `brew install cloudflared`; on Windows use
@@ -295,20 +295,20 @@ Speak only of 临时地址 / 固定域名 / 登录 Cloudflare.
      Do not re-ask on a later workspace or on reconnect.
    - `setupMode: "manual"`: skip step 5's automatic ChatGPT settings. Go to
      **Guided manual ChatGPT setup** (chosen). Opening line:
-     `接下来用手动教学配置。一次只需要做一个操作。`
-     Do not say 自动配置没有成功.
+     `これから手動ガイドで設定します。一度に1つの操作だけ案内します。`
+     Do not say 自動設定に失敗しました.
    - `setupMode: "auto"`: continue with step 5. Keep the two-failure fallback.
 5. Open ChatGPT on the ONE iab tab (see **In-app browser**). Foreground +
    markHandoff immediately. Same tab, `goto` only:
-   - 开发人员模式: skip `https://chatgpt.com/#settings/Security` when
-     `developerModeEnabled` is true. Otherwise open it, enable 开发人员模式
+   - 開発者モード: skip `https://chatgpt.com/#settings/Security` when
+     `developerModeEnabled` is true. Otherwise open it, enable 開発者モード
      ("Developer mode") if it is off, then `c2c prefs set --developer-mode`.
      Never record it as off. If creating the connector later says developer
      mode is required, open this page, enable it, save `--developer-mode`,
      and retry create — do not skip that recovery.
-   - 已有该 `connectorName`: `https://chatgpt.com/plugins` — Delete it (never
-     Reconnect). Then `goto` the 加插件 URL below.
-   - 还没有 / 刚删掉: `https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2Fplugins`
+   - 既に同じ `connectorName` がある: `https://chatgpt.com/plugins` — Delete it (never
+     Reconnect). Then `goto` the コネクタ追加 URL below.
+   - まだない / 削除した直後: `https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2Fplugins`
      Operate ONLY on `connectorName` from step 3:
       - If that exact name exists: Delete it, then create it again. Never
         Reconnect, never edit-in-place, never open the old Server URL.
@@ -334,17 +334,17 @@ Speak only of 临时地址 / 固定域名 / 登录 Cloudflare.
 ```
 Codex with ChatGPT
 
-✓ 当前项目已识别
-✓ Workspace Bridge 已启动
-✓ 安全连接已建立
-✓ ChatGPT 已连接
-✓ 文件读取测试通过
+✓ 現在のプロジェクトを確認
+✓ Workspace Bridgeを起動
+✓ 安全な接続を確立
+✓ ChatGPTへ接続
+✓ ファイル読み取りテスト成功
 
-Ready.
+準備完了
 ```
 
 If a login wall appears (ChatGPT, Cloudflare): stop, tell the user the ONE thing
-to do ("请登录 ChatGPT，完成后告诉我'好了'"), then continue.
+to do ("ChatGPTへログインし、完了したら「完了」と伝えてください。"), then continue.
 
 ### Guided manual ChatGPT setup
 
@@ -362,15 +362,15 @@ Do not change the saved `setupMode` when this is a failure fallback.
 
 Opening line:
 
-- Chosen (`setupMode: "manual"`): `接下来用手动教学配置。一次只需要做一个操作。`
-- Failure fallback: `自动配置没有成功，我来带你手动完成。一次只需要做一个操作。`
+- Chosen (`setupMode: "manual"`): `これから手動ガイドで設定します。一度に1つの操作だけ案内します。`
+- Failure fallback: `自動設定を完了できなかったため、手動で案内します。一度に1つの操作だけ行います。`
 
-Then guide ONE action at a time, waiting for the user to say「好了」before the
+Then guide ONE action at a time, waiting for the user to say「完了」before the
 next action:
 
 1. If `developerModeEnabled` is not true: ask them to open
-   `https://chatgpt.com/#settings/Security` and enable 开发人员模式. After they
-   say「好了」, `c2c prefs set --developer-mode`. If it is already remembered,
+   `https://chatgpt.com/#settings/Security` and enable 開発者モード. After they
+   say「完了」, `c2c prefs set --developer-mode`. If it is already remembered,
    skip this step.
 2. Ask them to open `https://chatgpt.com/plugins`. If the exact `connectorName`
    exists, delete only that connector. Never ask them to touch another workspace's connector.
@@ -396,7 +396,7 @@ later say they want a Project, run **Bind Project**. A brand-new workspace
 (no session file) is **project**.
 
 Never match a Project or a chat by display name. Never upload the repo to
-Project sources. Never click 分享 / Share. Do not rename ChatGPT chats.
+Project sources. Never click 共有 / Share. Do not rename ChatGPT chats.
 
 ### long-chat (do not rewrite this path)
 
@@ -441,7 +441,7 @@ One ChatGPT Project per workspace. Mapping:
 - If you already saved a ChatGPT chat URL earlier in THIS Codex conversation:
   `goto` that URL. Continue. No new chat. No HANDOFF.
 - Else if `conversation.projectReady`: `goto` `conversation.projectUrl`.
-  On that page, use the on-page composer (「{项目名}中的新聊天」 / "New chat
+  On that page, use the on-page composer (「<プロジェクト名>で新しいチャット」 / "New chat
   in …"). Do not use the sidebar and do not `goto` `https://chatgpt.com/`.
   Confirm Chat mode (**In-app browser** §7). Boot prompt, then workspace_info
   with the **exact** `connectorName`. After the reply names this workspace,
@@ -453,8 +453,8 @@ One ChatGPT Project per workspace. Mapping:
 **Update it**: same `c2c session set --task / --iteration / --state` as long-chat.
 
 **Wrong collection**: do not guess another Project. Tell the user the expected
-workspace name, ask them to open the right collection, then say「已找到」.
-Also offer「继续用长对话」. If they pick long-chat:
+workspace name, ask them to open the right collection, then say「見つかりました」.
+Also offer「長いチャットを使い続ける」. If they pick long-chat:
 `c2c session set -w <ws> --mode long-chat` and use the long-chat path.
 If the collection 404s or the new chat is not inside the Project, same choice.
 
@@ -471,30 +471,30 @@ Project. Do **not** click the ChatGPT sidebar to create the Project
 1. Tell the user exactly this (fill in the workspace name):
 
 ```
-请在 ChatGPT 里新建一个项目，名字用「<workspaceName>」，记忆请选「仅限项目记忆」。
+ChatGPTで新しいProjectを作成し、名前を「<workspaceName>」にしてください。メモリは「プロジェクトのみのメモリ」を選択してください。
 
-如果侧栏里看不到「项目」：把鼠标放在「聊天」上，点右边出现的三个点，选择「按项目整理」。
+サイドバーに「プロジェクト」が表示されない場合は、「チャット」にマウスを置き、右側の「…」から「プロジェクトで整理」を選択してください。
 
-建好后会打开合集页面。看到页面后跟我说「好了」。
+作成後にProjectページが開いたら「完了」と伝えてください。
 ```
 
-2. Wait for「好了」/ the collection page. Same iab tab: read the address bar.
+2. Wait for「完了」/ the collection page. Same iab tab: read the address bar.
    It must look like `https://chatgpt.com/g/g-p-…/project`. If it does not,
    ask them to open that project until it does. Then:
    `c2c session set -w <ws> --mode project --project-url <url> --connector-name "<connectorName>"`.
 
-3. On that same collection page only, open 右上角 **… → 项目设置**.
-   Do not click 分享. Do not add 来源 / files.
-   - 记忆: 仅限项目记忆 (project-only). Leave 库访问权限 disabled.
-   - 指令: paste **Project instructions** below (fill `{{…}}` from
+3. On that same collection page only, open 右上の **… → プロジェクト設定**.
+   Do not click 共有. Do not add ソース / files.
+   - メモリ: プロジェクトのみのメモリ (project-only). Leave ライブラリアクセス disabled.
+   - 指示: paste **Project instructions** below (fill `{{…}}` from
      `workspace_info` / setup). Use the exact `connectorName` from setup.
-     Never write the public / temporary address into 指令.
+     Never write the public / temporary address into 指示.
    Save and close settings.
 
 4. Still on the collection page, create the first chat with the on-page
    composer, then boot + workspace_info as in setup step 5. Save the chat URL.
 
-### Project instructions (paste into 项目设置 → 指令)
+### Project instructions (paste into プロジェクト設定 → 指示)
 
 ```
 You are the planning and review layer for one local workspace. Codex executes.
@@ -527,7 +527,7 @@ Be substantive: why, which file, what to test. No empty one-liners and
 no 40-step epics. Use C2C control messages.
 ```
 
-## Workflow: coding task（"使用 Codex with ChatGPT 完成 XXX"）
+## Workflow: coding task（"Codex with ChatGPTを使って XXX を実装して"）
 
 Protocol states sent to ChatGPT: INIT → PLAN → EXECUTING → EXECUTED → REVIEW → (PLAN | DONE | BLOCKED).
 Local checkpoint states (session only, never a ChatGPT `STATE:` line):
@@ -647,22 +647,22 @@ If status is restricted, ignore it and review from git_diff.
 7. ChatGPT reviews via MCP (`git_diff`, `read_file`, `test_status`,
    `execution_output`) and replies DONE / PLAN (next iteration) / BLOCKED.
 8. Loop. Respect maxIterations (`.c2c.json`, default 12). At the limit, pause and ask
-   the user: "已完成 12 轮协作，仍有未解决问题，是否继续？"
+   the user: "12回の協調作業を完了しましたが、未解決の問題が残っています。続行しますか？"
 9. On DONE: summarize the result to the user in plain language.
    `c2c session set -w <ws> --state DONE --clear-checkpoint`
 10. On BLOCKED: read ChatGPT's reason, fix what you can, or surface the single
     decision the user must make.
     `c2c session set -w <ws> --protocol-state BLOCKED --waiting-for USER --known-issues "<short reason>"`
 
-## Workflow: disconnect（"断开 ChatGPT"）
+## Workflow: disconnect（"ChatGPTとの接続を解除"）
 
 1. `c2c unpair -w <workspace>` (revokes all tokens immediately).
 2. Optionally remove the connector on the same iab tab via
    `https://chatgpt.com/plugins` (foreground + markHandoff). Only touch
    this workspace's `connectorName`.
-3. Tell the user: "已断开 ChatGPT 对该项目的访问。"
+3. Tell the user: "このプロジェクトに対するChatGPTのアクセスを解除しました。"
 
-## Workflow: reconnect after address reclaim（全关掉以后地址失效）
+## Workflow: reconnect after address reclaim（全て終了した後に接続先が無効になった場合）
 
 This is the normal case when the user quit Codex / the terminal / the machine:
 the previous public address is gone. Doctor already started a new one.
@@ -679,18 +679,18 @@ the previous public address is gone. Doctor already started a new one.
    `manual`, use **Guided manual ChatGPT setup** (chosen) instead of automating.
 2. Same one iab tab as setup (foreground + markHandoff). Settings URLs only
    until Connected — never hunt menus:
-   - 开发人员模式: skip `https://chatgpt.com/#settings/Security` when
+   - 開発者モード: skip `https://chatgpt.com/#settings/Security` when
      `developerModeEnabled` is true. If create/delete then says developer
      mode is required, open it, enable, `c2c prefs set --developer-mode`.
-   - 插件总管（只用来 Delete）: `https://chatgpt.com/plugins`
-   - 加插件（Delete 之后必走）: `https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2Fplugins`
+   - コネクタ一覧（Deleteにのみ使用）: `https://chatgpt.com/plugins`
+   - コネクタ追加（Delete後は必ずここを使用）: `https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2Fplugins`
 3. Operate ONLY on `chatgptRepair.connectorName`. Never touch another
    workspace's connector.
    - If that exact name exists on the plugins hub: **Delete** it. Confirm the
      delete if ChatGPT asks. **Never click Reconnect, Refresh, Connect, or
      Edit** on the old card — the old Server URL is dead and the page will
      hang on "This site cannot be reached".
-   - Then `goto` the 加插件 URL and create that **same** `connectorName`
+   - Then `goto` the コネクタ追加 URL and create that **same** `connectorName`
      (do not invent a second name):
       - Description: `Securely connect ChatGPT to the current Codex workspace for planning and review.`
       - Server URL: `chatgptRepair.mcpUrl`
@@ -708,10 +708,10 @@ the previous public address is gone. Doctor already started a new one.
    management switch. project → collection page, new chat, boot + HANDOFF.
    No file re-uploading (the workspace lives in MCP). After recreating the
    same-name connector, the Project still uses that name. If tools point at
-   the wrong connector, open 项目设置 and confirm 指令 still names
+   the wrong connector, open プロジェクト設定 and confirm 指示 still names
    `connectorName` (never paste the new public address).
 
-## Workflow: repair（anything looks broken）
+## Workflow: repair（問題がある場合）
 
 1. `c2c doctor -w <workspace> --json`. Doctor gate: do not open ChatGPT / send
    `[C2C]` until local is green, except reconnect settings pages.
@@ -727,12 +727,12 @@ the previous public address is gone. Doctor already started a new one.
 | Symptom | Action |
 | --- | --- |
 | Bridge not running | `c2c start` (doctor does this automatically) |
-| Tunnel dead / URL unreachable / 全关掉后连接失效 | `c2c doctor` → if `namedRepair.needed`, login to Cloudflare and doctor again (do not Delete). If `chatgptRepair.needed`, tell the user the message, then **Delete** THIS workspace's connector only (`connectorName`) and create it again. Never Reconnect. |
+| Tunnel dead / URL unreachable / 全て終了した後に接続が無効 | `c2c doctor` → if `namedRepair.needed`, login to Cloudflare and doctor again (do not Delete). If `chatgptRepair.needed`, tell the user the message, then **Delete** THIS workspace's connector only (`connectorName`) and create it again. Never Reconnect. |
 | ChatGPT says tool call failed / 401 | token expired or revoked → re-pair (new pairing code + authorize) |
 | Pairing code rejected/expired | `c2c pair --json` for a fresh code |
 | Same explicit ChatGPT setup/reconnect browser configuration step fails twice after repair | Stop automating ChatGPT settings and use **Guided manual ChatGPT setup fallback**. Do not count browser/js timeout, loading/generating, or login/2FA waiting as failures. |
 | Port conflict | handled automatically; never surface to the user |
 | Every new chat “repairs” / cannot write the log or settings directory | `c2c sandbox-allow --json` (once). Do not ask the user. |
 | cloudflared missing | install it yourself (brew/winget), then retry |
-| Sidebar has no「项目」 | Ask the user to hover「聊天」, click the …, choose「按项目整理」 |
-| Collection page is the wrong Project | Ask the user to open the named collection and say「已找到」, or accept long-chat |
+| Sidebar has no「プロジェクト」 | Ask the user to hover「チャット」, click the …, choose「プロジェクトで整理」 |
+| Collection page is the wrong Project | Ask the user to open the named collection and say「見つかりました」, or accept long-chat |

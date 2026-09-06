@@ -76,5 +76,5 @@ export function connectorNameFor(opts: {
 }
 
 export function reclaimUserMessage(connectorName: string): string {
-  return `当前项目的安全连接地址已经失效。我会删除「${connectorName}」再按新地址加回去，其它项目的连接不动。请稍等。`;
+  return `現在のプロジェクトの安全な接続先が無効になりました。「${connectorName}」だけを削除し、新しい接続先で再作成します。他のプロジェクトの接続には触れません。少しお待ちください。`;
 }

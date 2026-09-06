@@ -264,9 +264,9 @@ program
         say(JSON.stringify({ ok: true, port: runtime.port, workspaceId: info.workspaceId, mcpUrl, connectorName }));
         return;
       }
-      check(`当前项目已识别（${info.workspaceName}）`);
-      check("Workspace Bridge 已启动");
-      if (mcpUrl) check("安全连接已建立");
+      check(`現在のプロジェクトを確認（${info.workspaceName}）`);
+      check("Workspace Bridgeを起動");
+      if (mcpUrl) check("安全な接続を確立");
     } catch (error) {
       handleCliError(error, opts.json);
     }
@@ -286,7 +286,7 @@ program
       if (!opts.json) {
         say(PRODUCT_NAME);
         say("");
-        say("正在连接 ChatGPT…");
+        say("ChatGPTへ接続しています…");
         say("");
       }
       const sandbox = trySandboxAllow();
@@ -328,15 +328,15 @@ program
         );
         return;
       }
-      check(`当前项目已识别（${info.workspaceName}）`);
-      check("Workspace Bridge 已启动");
-      if (mcpUrl) check("安全连接已建立");
+      check(`現在のプロジェクトを確認（${info.workspaceName}）`);
+      check("Workspace Bridgeを起動");
+      if (mcpUrl) check("安全な接続を確立");
       say("");
-      say(`连接地址：${mcpUrl ?? `http://127.0.0.1:${runtime.port}/mcp`}`);
-      say(`配对码：${pairingResult.code}（${Math.round((pairingResult.expiresAt - Date.now()) / 60000)} 分钟内有效）`);
+      say(`接続先：${mcpUrl ?? `http://127.0.0.1:${runtime.port}/mcp`}`);
+      say(`ペアリングコード：${pairingResult.code}（${Math.round((pairingResult.expiresAt - Date.now()) / 60000)}分間有効）`);
       say("");
-      say("下一步：在 ChatGPT 的连接器设置中添加以上地址（OAuth），并在授权页输入配对码。");
-      say("如果你在使用 Codex Skill，这一步会自动完成。");
+      say("次の手順：ChatGPTのコネクタ設定に上記の接続先をOAuthとして追加し、認証画面でペアリングコードを入力してください。");
+      say("Codex Skillを使用している場合、この手順は自動で実行されます。");
     } catch (error) {
       handleCliError(error, opts.json);
     }
@@ -350,8 +350,8 @@ program
   .option("-w, --workspace <path>")
   .action(async (opts: { workspace?: string }) => {
     const stopped = await stopBridge(resolveWorkspace(opts.workspace));
-    if (stopped) check("Bridge 已停止");
-    else say("没有正在运行的 Bridge。");
+    if (stopped) check("Bridgeを停止しました");
+    else say("実行中のBridgeはありません。");
   });
 
 program
@@ -365,8 +365,8 @@ program
     await new Promise((resolve) => setTimeout(resolve, 500));
     try {
       const { info, mcpUrl } = await ensureBridgeAndTunnel(root, { tunnel: opts.tunnel });
-      check(`Bridge 已重启（${info.workspaceName}）`);
-      if (mcpUrl) check(`安全连接已建立`);
+      check(`Bridgeを再起動（${info.workspaceName}）`);
+      if (mcpUrl) check("安全な接続を確立");
     } catch (error) {
       handleCliError(error, false);
     }
@@ -387,13 +387,13 @@ program
       if (opts.json) {
         say(JSON.stringify({ ok: false, running: null, state: "unknown", reason: observation.reason }));
       } else {
-        cross(`Bridge 状态无法确认（${observation.reason}），未将其视为未运行。`);
+        cross(`Bridgeの状態を確認できません（${observation.reason}）。停止中とは判断しません。`);
       }
       return;
     }
     if (observation.state === "stopped") {
       if (opts.json) say(JSON.stringify({ ok: false, running: false }));
-      else say("Bridge 未运行。使用 `c2c start` 启动。");
+      else say("Bridgeは実行されていません。`c2c start` で起動できます。");
       return;
     }
     const runtime = observation.runtime;
@@ -405,10 +405,10 @@ program
     say(PRODUCT_NAME);
     say("");
     check(`Workspace：${info.workspaceName}`);
-    check(`Bridge：运行中（端口 ${info.port}）`);
-    if (info.tunnel.running && info.tunnel.url) check(`安全连接：${info.tunnel.url}/mcp`);
-    else say("· 安全连接：未启用（本地模式）");
-    say(`· 已授权连接：${info.tokenCount > 0 ? "是" : "否"}`);
+    check(`Bridge：実行中（ポート ${info.port}）`);
+    if (info.tunnel.running && info.tunnel.url) check(`安全な接続：${info.tunnel.url}/mcp`);
+    else say("· 安全な接続：無効（ローカルモード）");
+    say(`· 認証済み接続：${info.tokenCount > 0 ? "あり" : "なし"}`);
   });
 
 // ---------------------------------------------------------------- doctor
@@ -432,8 +432,8 @@ program
     if (opts.fix) {
       const sandbox = trySandboxAllow();
       if (sandbox.ok) {
-        report.sandbox = { ok: true, detail: sandbox.alreadyAllowed ? "已在白名单" : "已写入白名单" };
-        if (sandbox.added) results.push("已将本地设置目录加入 Codex 沙箱白名单");
+        report.sandbox = { ok: true, detail: sandbox.alreadyAllowed ? "許可リスト登録済み" : "許可リストへ追加済み" };
+        if (sandbox.added) results.push("ローカル設定ディレクトリをCodex sandboxの許可リストへ追加しました");
       } else {
         report.sandbox = { ok: false, detail: sandbox.error };
       }
@@ -442,7 +442,7 @@ program
         const configPath = getCodexConfigPath();
         const allowed =
           fs.existsSync(configPath) && isStateDirAllowlisted(fs.readFileSync(configPath, "utf8"), getStateDir());
-        report.sandbox = allowed ? { ok: true, detail: "已在白名单" } : { ok: false, detail: "未在白名单" };
+        report.sandbox = allowed ? { ok: true, detail: "許可リスト登録済み" } : { ok: false, detail: "許可リスト未登録" };
       } catch (error) {
         report.sandbox = { ok: false, detail: (error as Error).message };
       }
@@ -466,17 +466,17 @@ program
         runtime = observation.runtime;
       } else if (observation.state === "unknown") {
         bridgeUnknown = true;
-        report.bridge = { ok: false, detail: `状态无法确认（${observation.reason}），未自动修复` };
+        report.bridge = { ok: false, detail: `状態を確認できません（${observation.reason}）。自動修復は実行していません` };
       } else if (opts.fix) {
         try {
           runtime = (await ensureBridge(root)).runtime;
-          results.push("已自动启动 Bridge");
+          results.push("Bridgeを自動起動しました");
         } catch (error) {
           report.bridge = { ok: false, detail: (error as Error).message };
         }
       }
-      if (runtime) report.bridge = { ok: true, detail: `端口 ${runtime.port}` };
-      else report.bridge = report.bridge ?? { ok: false, detail: "未运行" };
+      if (runtime) report.bridge = { ok: true, detail: `ポート ${runtime.port}` };
+      else report.bridge = report.bridge ?? { ok: false, detail: "未実行" };
     }
 
     // MCP local reachability (401 without token means MCP + auth both work)
@@ -487,7 +487,7 @@ program
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ jsonrpc: "2.0", method: "ping", id: 1 }),
         });
-        report.mcp = { ok: response.status === 401, detail: `未授权请求返回 ${response.status}` };
+        report.mcp = { ok: response.status === 401, detail: `未認証リクエストの応答 ${response.status}` };
         report.oauth = { ok: response.status === 401 };
       } catch (error) {
         report.mcp = { ok: false, detail: (error as Error).message };
@@ -545,7 +545,7 @@ program
         try {
           runtime = (await ensureBridge(root)).runtime;
           info = await adminFetch<AdminInfo>(runtime, "GET", "/admin/info");
-          results.push("已切换到固定域名连接");
+          results.push("固定ドメイン接続へ切り替えました");
         } catch (error) {
           report.tunnel = { ok: false, detail: (error as Error).message };
         }
@@ -576,7 +576,7 @@ program
               info = await adminFetch<AdminInfo>(runtime, "GET", "/admin/info");
               const sameAddress =
                 previousUrl && normalizePublicUrl(previousUrl) === normalizePublicUrl(started.url);
-              results.push(sameAddress ? "已重新建立安全连接" : "已重新建立安全连接（地址已更换）");
+              results.push(sameAddress ? "安全な接続を再確立しました" : "安全な接続を再確立しました（接続先が変更されました）");
             }
           }
         } catch (error) {
@@ -613,7 +613,7 @@ program
             const pairing = await adminFetch<PairingResponse>(runtime, "POST", "/admin/pairing");
             chatgptRepair.pairingCode = pairing.code;
             chatgptRepair.pairingExpiresAt = pairing.expiresAt;
-            results.push(`已生成新的配对码，需要更新「${boundName}」`);
+            results.push(`新しいペアリングコードを生成しました。「${boundName}」の更新が必要です`);
           } catch (error) {
             report.oauth = { ok: false, detail: (error as Error).message };
           }
@@ -622,7 +622,7 @@ program
         report.tunnel = report.tunnel ?? { ok: false, detail: "NAMED_TUNNEL_DOWN" };
         namedRepair = { needed: true, userMessage: NAMED_REPAIR_MESSAGE };
       } else if (expectedPublic) {
-        report.tunnel = report.tunnel ?? { ok: false, detail: "安全连接未恢复" };
+        report.tunnel = report.tunnel ?? { ok: false, detail: "安全な接続を復旧できません" };
         chatgptRepair = {
           ...chatgptRepair,
           needed: true,
@@ -633,17 +633,17 @@ program
           mcpUrl: null,
         };
       } else if (!currentUrl) {
-        report.tunnel = { ok: true, detail: "未启用（本地模式）" };
+        report.tunnel = { ok: true, detail: "無効（ローカルモード）" };
       } else {
-        report.tunnel = { ok: false, detail: "公网地址无法访问" };
+        report.tunnel = { ok: false, detail: "公開アドレスへ接続できません" };
       }
     } else if (bridgeUnknown) {
-      report.tunnel = report.tunnel ?? { ok: false, detail: "Bridge 状态无法确认，未执行连接器修复" };
+      report.tunnel = report.tunnel ?? { ok: false, detail: "Bridgeの状態を確認できないため、コネクタ修復は実行していません" };
     } else if (namedReady) {
       report.tunnel = { ok: false, detail: "NAMED_TUNNEL_DOWN" };
       namedRepair = { needed: true, userMessage: NAMED_REPAIR_MESSAGE };
     } else if (lastEndpoint?.publicUrl) {
-      report.tunnel = { ok: false, detail: "安全连接未运行" };
+      report.tunnel = { ok: false, detail: "安全な接続は実行されていません" };
       chatgptRepair = {
         ...chatgptRepair,
         needed: true,
@@ -686,18 +686,18 @@ program
     }
     if (chatgptRepair.needed && chatgptRepair.userMessage) {
       say(chatgptRepair.userMessage);
-      if (chatgptRepair.mcpUrl) say(`新的连接地址：${chatgptRepair.mcpUrl}`);
-      if (chatgptRepair.pairingCode) say(`配对码：${chatgptRepair.pairingCode}`);
+      if (chatgptRepair.mcpUrl) say(`新しい接続先：${chatgptRepair.mcpUrl}`);
+      if (chatgptRepair.pairingCode) say(`ペアリングコード：${chatgptRepair.pairingCode}`);
       say("");
     }
     say(
       allOk && !chatgptRepair.needed && !namedRepair.needed
         ? "Everything looks good."
         : chatgptRepair.needed
-          ? "本地已就绪，还需要在 ChatGPT 删除并重新添加该连接。"
+          ? "ローカル側の準備は完了しています。ChatGPTで対象コネクタを削除し、再追加する必要があります。"
           : namedRepair.needed
-            ? "固定域名还没连上，需要先登录 Cloudflare。"
-            : "仍有问题未解决，可尝试 `c2c restart --tunnel`。"
+            ? "固定ドメインへ接続できていません。先にCloudflareへログインしてください。"
+            : "未解決の問題があります。`c2c restart --tunnel` を試してください。"
     );
     if (!allOk || namedRepair.needed) process.exitCode = 1;
   });
@@ -715,8 +715,8 @@ program
       const pairing = await adminFetch<PairingResponse>(runtime, "POST", "/admin/pairing");
       if (opts.json) say(JSON.stringify({ ok: true, pairingCode: pairing.code, expiresAt: pairing.expiresAt }));
       else {
-        say(`配对码：${pairing.code}`);
-        say(`（${Math.round((pairing.expiresAt - Date.now()) / 60000)} 分钟内有效，仅可使用一次）`);
+        say(`ペアリングコード：${pairing.code}`);
+        say(`（${Math.round((pairing.expiresAt - Date.now()) / 60000)}分間有効・1回のみ使用可能）`);
       }
     } catch (error) {
       handleCliError(error, opts.json);
@@ -737,7 +737,7 @@ program
       // bridge not running: revoke directly in the persisted store
       new AuthStore(workspace.id).revokeAll();
     }
-    check("已断开 ChatGPT 对当前项目的访问（所有令牌已吊销）");
+    check("現在のプロジェクトに対するChatGPTのアクセスを解除しました（すべてのTokenを失効）");
   });
 
 // ---------------------------------------------------------------- logs / workspace / record
@@ -762,7 +762,7 @@ program
       say(filtered.slice(-parseInt(opts.lines, 10)).join("\n"));
       shown = true;
     }
-    if (!shown) say("暂无日志。");
+    if (!shown) say("ログはまだありません。");
   });
 
 program
@@ -777,8 +777,8 @@ program
     if (opts.json) say(JSON.stringify(data));
     else {
       say(`Workspace：${data.name}（${data.workspaceId}）`);
-      say(`类型：${data.projectType}  语言：${data.languages.join(", ") || "-"}`);
-      say(`路径：${data.root}`);
+      say(`種類：${data.projectType}  言語：${data.languages.join(", ") || "-"}`);
+      say(`パス：${data.root}`);
     }
   });
 
@@ -796,12 +796,12 @@ program
       return;
     }
     if (!result.ok) {
-      cross(`无法写入 Codex 沙箱白名单：${result.error}`);
+      cross(`Codex sandboxの許可リストへ書き込めません：${result.error}`);
       process.exitCode = 1;
       return;
     }
-    if (result.alreadyAllowed) check("沙箱白名单已就绪，后续对话无需再提权");
-    else check("已将本地设置目录加入 Codex 沙箱白名单（后续对话无需再提权）");
+    if (result.alreadyAllowed) check("sandbox許可リストは設定済みです。以後の会話で追加権限は不要です");
+    else check("ローカル設定ディレクトリをCodex sandboxの許可リストへ追加しました（以後の会話で追加権限は不要です）");
   });
 
 // ---------------------------------------------------------------- update-check (once per local day)
@@ -841,12 +841,12 @@ program
       note?: string;
     }): void => {
       if (opts.json) say(JSON.stringify({ ok: true, version: VERSION, ...data }));
-      else if (data.updateAvailable) say(`发现新版本（本地 ${data.localCommit?.slice(0, 7)} → 远端 ${data.remoteCommit?.slice(0, 7)}）。`);
-      else say(data.note ?? "已是最新版本。");
+      else if (data.updateAvailable) say(`新しいバージョンがあります（ローカル ${data.localCommit?.slice(0, 7)} → リモート ${data.remoteCommit?.slice(0, 7)}）。`);
+      else say(data.note ?? "最新バージョンです。");
     };
 
     if (!opts.force && last.date === today) {
-      emit({ checked: false, updateAvailable: last.updateAvailable ?? false, note: "今天已检查过更新。" });
+      emit({ checked: false, updateAvailable: last.updateAvailable ?? false, note: "本日はすでに更新を確認済みです。" });
       return;
     }
 
@@ -855,7 +855,7 @@ program
     if (!local.ok || !remote.ok || !remote.stdout) {
       // Offline or not a git checkout: skip quietly and retry tomorrow-ish (do not
       // record the date so a transient failure does not suppress the daily check).
-      emit({ checked: false, updateAvailable: false, note: "无法检查更新（离线或非 git 安装），已跳过。" });
+      emit({ checked: false, updateAvailable: false, note: "更新を確認できませんでした（オフライン、またはgit checkoutではありません）。今回はスキップします。" });
       return;
     }
     const remoteCommit = remote.stdout.split(/\s/)[0];
@@ -882,17 +882,17 @@ session
     const conversation = resolveConversation(saved);
     if (opts.json) say(JSON.stringify({ ok: true, session: saved, conversation }));
     else if (!saved) {
-      say("尚未记录 ChatGPT 会话。新仓库默认使用 Project 合集。");
+      say("ChatGPTの会話はまだ保存されていません。新しいRepositoryではProjectを既定で使用します。");
     } else {
-      say(`模式：${conversation.mode === "project" ? "Project 合集" : "长对话"}`);
-      if (conversation.projectUrl) say(`合集：${conversation.projectUrl}`);
-      if (saved.title) say(`会话：${saved.title}`);
-      if (saved.url) say(`对话：${saved.url}`);
-      if (saved.connectorName) say(`连接器：${saved.connectorName}`);
-      if (saved.taskId) say(`任务：${saved.taskId}（第 ${saved.iteration ?? 0} 轮，${saved.lastState ?? "?"}）`);
+      say(`モード：${conversation.mode === "project" ? "Project" : "長いチャット"}`);
+      if (conversation.projectUrl) say(`Project：${conversation.projectUrl}`);
+      if (saved.title) say(`会話名：${saved.title}`);
+      if (saved.url) say(`チャット：${saved.url}`);
+      if (saved.connectorName) say(`コネクタ：${saved.connectorName}`);
+      if (saved.taskId) say(`タスク：${saved.taskId}（${saved.iteration ?? 0}回目、${saved.lastState ?? "?"}）`);
       if (saved.checkpoint) {
         say(
-          `存档：${saved.checkpoint.protocolState} / 等待 ${saved.checkpoint.waitingFor}（第 ${saved.checkpoint.iteration} 轮）`
+          `チェックポイント：${saved.checkpoint.protocolState} / 待機先 ${saved.checkpoint.waitingFor}（${saved.checkpoint.iteration}回目）`
         );
       }
     }
@@ -977,9 +977,9 @@ session
       });
       writeSession(workspace.id, saved);
       if (saved.projectUrl && saved.conversationMode === "project") {
-        check("已记录 ChatGPT 合集，后续从合集页新开或复用对话");
+        check("ChatGPT Projectを保存しました。以後はProjectページから新規チャットを作成または再利用します");
       } else {
-        check("已记录 ChatGPT 会话，后续任务将复用");
+        check("ChatGPTの会話を保存しました。以後のタスクで再利用します");
       }
     }
   );
@@ -991,9 +991,9 @@ session
   .action((opts: { workspace?: string }) => {
     const workspace = new Workspace(resolveWorkspace(opts.workspace));
     const result = clearChatPointer(workspace.id);
-    if (!result.cleared) say("尚未记录 ChatGPT 会话。");
-    else if (result.keptProject) check("已清除当前对话，合集绑定仍保留");
-    else check("已清除会话记录，下次任务将新建 ChatGPT 会话");
+    if (!result.cleared) say("ChatGPTの会話はまだ保存されていません。");
+    else if (result.keptProject) check("現在のチャットをクリアしました。Projectとの紐付けは保持しています");
+    else check("会話記録をクリアしました。次回タスクでは新しいChatGPTチャットを作成します");
   });
 
 const prefsCmd = program
@@ -1010,10 +1010,10 @@ prefsCmd
       say(JSON.stringify({ ok: true, ...prefs }));
       return;
     }
-    say(prefs.developerModeEnabled ? "开发人员模式：已记住已开启" : "开发人员模式：尚未记住");
-    if (prefs.setupMode === "auto") say("配置方式：AI 自动化配置（预览版）");
-    else if (prefs.setupMode === "manual") say("配置方式：手动教学配置");
-    else say("配置方式：尚未选择");
+    say(prefs.developerModeEnabled ? "開発者モード：有効として保存済み" : "開発者モード：未確認");
+    if (prefs.setupMode === "auto") say("設定方法：AIによる自動設定（プレビュー）");
+    else if (prefs.setupMode === "manual") say("設定方法：手動ガイド設定");
+    else say("設定方法：未選択");
   });
 
 prefsCmd
@@ -1039,9 +1039,9 @@ prefsCmd
         say(JSON.stringify({ ok: true, ...prefs }));
         return;
       }
-      if (opts.developerMode) check("已记住开发人员模式已开启");
-      if (modeRaw === "auto") check("已记住配置方式：AI 自动化配置（预览版）");
-      if (modeRaw === "manual") check("已记住配置方式：手动教学配置");
+      if (opts.developerMode) check("開発者モードが有効であることを保存しました");
+      if (modeRaw === "auto") check("設定方法を保存しました：AIによる自動設定（プレビュー）");
+      if (modeRaw === "manual") check("設定方法を保存しました：手動ガイド設定");
     } catch (error) {
       handleCliError(error, opts.json);
     }
@@ -1105,9 +1105,9 @@ program
         outputId,
         outputAvailable,
       });
-      if (outputId !== undefined && !outputAvailable) check("已记录执行摘要（输出未对 ChatGPT 开放）");
-      else if (outputId !== undefined) check("已记录执行摘要与输出");
-      else check("已记录执行摘要");
+      if (outputId !== undefined && !outputAvailable) check("実行概要を保存しました（出力はChatGPTへ公開していません）");
+      else if (outputId !== undefined) check("実行概要と出力を保存しました");
+      else check("実行概要を保存しました");
     }
   );
 
@@ -1128,8 +1128,8 @@ tunnelCmd
         return;
       }
       if (payload.needsChoice) say(TUNNEL_CHOICE_PROMPT);
-      else if (payload.namedReady) check(`固定域名：${payload.hostname}`);
-      else say("当前使用临时地址。");
+      else if (payload.namedReady) check(`固定ドメイン：${payload.hostname}`);
+      else say("現在は一時アドレスを使用しています。");
     } catch (error) {
       handleCliError(error, opts.json);
     }
@@ -1156,7 +1156,7 @@ tunnelCmd
         }
         const payload = { ...tunnelChoicePayload(workspace), state };
         if (opts.json) say(JSON.stringify(payload));
-        else check("已选用临时地址");
+        else check("一時アドレスを使用する設定にしました");
         return;
       }
       if (mode !== "named") {
@@ -1167,7 +1167,7 @@ tunnelCmd
         const payload = {
           ok: false,
           need: "zone",
-          userMessage: "请告诉我已经加在 Cloudflare 上的域名，例如 example.com",
+          userMessage: "Cloudflareへ登録済みのドメインを入力してください（例：example.com）",
           loginPrompt: NAMED_LOGIN_PROMPT,
         };
         if (opts.json) {
@@ -1198,7 +1198,7 @@ tunnelCmd
         return;
       }
       if (result.fallback) say(result.userMessage ?? "");
-      else check(`固定域名已就绪：${result.state.hostname}`);
+      else check(`固定ドメインの準備が完了しました：${result.state.hostname}`);
     } catch (error) {
       handleCliError(error, opts.json);
     }
@@ -1215,7 +1215,7 @@ tunnelCmd
       await account.login();
       const payload = { ok: true, loggedIn: hasCloudflaredCert() };
       if (opts.json) say(JSON.stringify(payload));
-      else check("Cloudflare 已登录");
+      else check("Cloudflareへログインしました");
     } catch (error) {
       handleCliError(error, opts.json);
     }
@@ -1226,11 +1226,11 @@ function handleCliError(error: unknown, json: boolean): void {
   if (json) {
     say(JSON.stringify({ ok: false, error: message }));
   } else if (message.startsWith("NEED_CLOUDFLARED")) {
-    say("需要你完成一步：");
+    say("次の1操作が必要です：");
     say("");
-    say("尚未安装安全连接组件 cloudflared。");
-    say("macOS 用户可运行：brew install cloudflared");
-    say("完成后再试一次即可。");
+    say("安全な接続に必要なcloudflaredがインストールされていません。");
+    say("macOSでは次を実行できます：brew install cloudflared");
+    say("インストール後、もう一度実行してください。");
   } else {
     cross(message);
   }
