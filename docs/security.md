@@ -35,15 +35,17 @@
 | Token theft | Opaque high-entropy tokens; persisted records contain SHA-256 hashes; access tokens expire; refresh tokens rotate on every use; old refresh-token replay fails; revocation is supported |
 | Workspace traversal | Canonical realpath containment rejects absolute escape, `..`, null bytes and platform-specific path tricks |
 | Symlink escape | Canonicalization resolves symlinks before containment checks for files and directories |
+| Metadata containment bypass | Optional project JSON and project markers use the same resolver and require regular files; outside or sensitive targets are not used |
 | Sensitive files | Resolve/list/search/git-diff boundaries deny `.env*` (except `.env.example`), key material, SSH/cloud credentials, Docker/Kubernetes configs, Azure/gcloud state, `.pypirc`, Terraform state/vars, mobile provisioning files and other configured sensitive paths |
-| Regex ReDoS in Node fallback | Node fallback performs literal search only. Regex requires ripgrep; without a working ripgrep engine the request fails with `REGEX_ENGINE_UNAVAILABLE` |
+| Regex ReDoS in Node fallback | Regex queries require working ripgrep. Fallback glob matching uses bounded dynamic programming rather than constructing JavaScript RegExp from user input |
 | Outbound secret leakage | `read_file`, search matches, `git_diff` and execution output share the same outbound sanitizer for recognized GitHub/OpenAI/Slack/AWS/Google credentials, common secret assignments, C2C secrets and home paths |
 | Private-key leakage | Any returned text containing a `-----BEGIN ... PRIVATE KEY-----` block fails closed; the private-key body is not returned |
-| Oversized file / diff DoS | `read_file` caps response size; `git_diff` paginates with hard byte caps; search caps matches and file size |
+| Oversized responses | `read_file` caps response size, including the first selected line; `git_diff` paginates with hard byte caps; search caps matches and file size |
+| Configured external diff execution | Both diff inventory and patch requests explicitly disable external diff and textconv helpers; this is not a sandbox for every Git extension or local configuration |
 | Tunnel exposure | Bridge binds only to loopback; public exposure is via HTTPS tunnel. `/health` is anonymous and contains no workspace id, version or filesystem-derived data |
 | Admin API abuse | Admin API is loopback-only + random admin token stored in a restricted runtime file; requests carrying proxy headers are rejected; unauthenticated requests receive 404 |
 | Public exception leakage | Unhandled parser/route errors return generic JSON and do not echo stack traces, filesystem paths or raw exception text |
-| Log credential leakage | Logger sanitization redacts C2C bearer/pairing secrets and recognized outbound secret forms before writing |
+| Log credential leakage | Logger and MCP share the pure credential-redaction policy before text is written or returned |
 | Execution output leak | Codex may nominate test/build/lint/typecheck output; the shared sanitizer redacts recognized secrets, truncates output and refuses private-key blocks. Restricted items expose metadata only. ChatGPT cannot execute commands |
 | Unattended supply-chain update | Normal update checks report only. No automatic pull/install/build/restart and no automatic stash/reset. An explicit update request must inspect candidate diffs/dependencies and pass frozen install + test + typecheck + build before fast-forwarding |
 | Prompt injection to mutation | MCP exposes no write/delete/shell/execute/commit/package-install/arbitrary-network tool, so workspace text cannot grant those capabilities |
@@ -107,8 +109,48 @@ Recognized secret categories include:
 - C2C bearer/pairing secrets
 - home-directory usernames/paths
 
+Credential assignments include quoted JSON keys, quoted values containing spaces
+and escaped quotes, environment variables, and Basic/Bearer authorization values.
+The credential policy lives in `src/security/redact.ts` and is shared with Logger;
+`redact` remains exported from the logger module for compatibility. Private-key
+refusal and home-path handling remain at the outbound boundary. Recognition is not
+a guarantee that arbitrary unknown secret strings can be detected.
+
 Private-key material is stricter than redaction: the entire outbound response is
 withheld with a safe error rather than returning a partially redacted key block.
+
+## Read and search response contract
+
+`read_file` uses a byte budget including a newline allowance for each selected
+line. If the first selected line alone exceeds that budget it returns
+`FILE_TOO_LARGE`, rather than returning an oversized line. Later lines retain
+ordinary line-based pagination. The reader closes its stream on success or error.
+Counting all lines can still scan the entire file; response limits are not a
+complete memory/CPU sandbox for arbitrary files or concurrent filesystem changes.
+
+`workspace_info` reads optional `.c2c.json` and `package.json` only through the
+workspace resolver and only as regular files. Outside or sensitive targets fall
+back to absent metadata. Safe in-workspace metadata links remain supported.
+This does not describe the separate `.c2cignore` initialization path as audited.
+
+`git_diff` inventories and fetches paths relative to the connected workspace,
+including when that workspace is a Git repository subdirectory. Its returned
+`nextOffset` values preserve UTF-8 character boundaries. Start at offset zero and
+continue using returned offsets; manually chosen offsets inside a character are
+not a supported way to paginate. External diff and textconv helpers are disabled,
+but other local Git behavior remains outside this narrow control.
+
+`search_workspace` distinguishes normal no-match exit status from a failed
+ripgrep invocation or malformed output. Literal queries may fall back to Node;
+regex queries fail with `REGEX_ENGINE_UNAVAILABLE` when no working engine is
+available. Node fallback handles both regular-file and directory scopes.
+
+The Node glob subset supports star, globstar, recursive directories, question-mark
+wildcards and literal punctuation. Glob length is capped at 1024 characters.
+Fallback matching has a per-query budget of 20,000,000 token/path-state steps and
+uses memory proportional to the current path length. Exceeding these limits returns
+`SEARCH_LIMIT_EXCEEDED`; narrow the path or simplify the pattern. These are glob
+matching limits, not a total filesystem I/O deadline or full ripgrep-glob parity.
 
 ## Storage
 
@@ -159,3 +201,7 @@ That workflow must:
 A hardening commit is not considered verified solely because these controls exist
 in source. Deployment still requires the prescribed fresh validation on the exact
 candidate commit.
+
+The owner's 2026-09-06 audit separately uses static review, applied fixes, static
+re-review and records as its completion criteria. It does not execute tests or
+update the installed shared checkout, and it does not waive deployment controls.
