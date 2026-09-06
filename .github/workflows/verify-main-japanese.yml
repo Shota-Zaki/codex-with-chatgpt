@@ -1,0 +1,92 @@
+name: Verify main Japanese localization
+
+on:
+  push:
+    branches: [localization/japanese-only]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Scan tracked UTF-8 text for Chinese remnants
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib, re, subprocess, sys
+
+          root = pathlib.Path('.')
+          tracked = subprocess.check_output(['git','ls-files','-z']).decode().split('\0')
+          tracked = [p for p in tracked if p]
+
+          # Simplified-Chinese-only glyphs that should not appear in Japanese-localized sources.
+          simplified = set('这请仅个开关连对过说读录发轮设选记无该库页环启码终复统储签权认显项目业东时们为从应习组远边处刚运临删续话现总览试务证线验载标称语义议错误网络级备览层换达处类则进还让给将带问响应况际轻够顺稳续调输创获择认显转断暂码复')
+
+          chinese_patterns = [
+              r'使用\s*Codex with ChatGPT', r'完成首次配置', r'首次连接', r'请回复', r'请登录',
+              r'完成后告诉我', r'告诉我「好了」', r'当前项目', r'连接器', r'开发人员模式',
+              r'手动教学配置', r'自动化配置', r'临时地址', r'固定域名', r'删除并重新添加',
+              r'项目设置', r'合集', r'新聊天', r'长对话', r'已记录', r'尚未记录', r'第\s*\d+\s*轮',
+              r'内有效', r'所有令牌', r'沙箱白名单', r'需要你完成一步', r'稍等', r'如果', r'没有',
+              r'已经', r'然后', r'请选择', r'请告诉我', r'无法确认', r'未运行', r'已启动', r'已建立',
+              r'已连接', r'文件读取测试通过', r'已断开', r'当前使用', r'已登录', r'已选用',
+          ]
+          pattern_re = re.compile('|'.join(f'(?:{p})' for p in chinese_patterns))
+          fullwidth_comma = '，'
+
+          offenders = []
+          cjk_lines = []
+          pure_han_candidates = []
+          for rel in tracked:
+              path = root / rel
+              if not path.is_file() or path.stat().st_size > 1_000_000:
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except (UnicodeDecodeError, OSError):
+                  continue
+              for lineno, line in enumerate(text.splitlines(), 1):
+                  if re.search(r'[\u3400-\u4dbf\u4e00-\u9fff]', line):
+                      cjk_lines.append((rel, lineno, line))
+                  found = sorted(set(line) & simplified)
+                  if found:
+                      offenders.append((rel, lineno, 'simplified-glyph', ''.join(found), line))
+                  m = pattern_re.search(line)
+                  if m:
+                      offenders.append((rel, lineno, 'chinese-pattern', m.group(0), line))
+                  if fullwidth_comma in line:
+                      offenders.append((rel, lineno, 'chinese-comma', fullwidth_comma, line))
+                  # Candidate only: long Han-only sequences with no Japanese kana nearby.
+                  if re.search(r'[\u4e00-\u9fff]{6,}', line) and not re.search(r'[\u3040-\u30ff]', line):
+                      pure_han_candidates.append((rel, lineno, line))
+
+          print(f'Tracked UTF-8 files scanned: {len(tracked)}')
+          print(f'CJK-containing lines: {len(cjk_lines)}')
+          print(f'Long Han-only candidate lines: {len(pure_han_candidates)}')
+          for rel, lineno, line in pure_han_candidates:
+              print(f'CANDIDATE {rel}:{lineno}: {line[:300]}')
+
+          if offenders:
+              print('\nChinese-remnant offenders:')
+              seen = set()
+              for item in offenders:
+                  key = item[:4]
+                  if key in seen:
+                      continue
+                  seen.add(key)
+                  rel, lineno, kind, token, line = item
+                  print(f'OFFENDER {kind} {rel}:{lineno} token={token!r}: {line[:400]}')
+              sys.exit(1)
+          print('No Chinese-remnant signals detected.')
+          PY
+      - name: Run repository localization regression test
+        shell: bash
+        run: |
+          corepack enable
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm test tests/japanese-localization.test.ts
