@@ -69,7 +69,7 @@ jobs:
                       offenders.append((rel, lineno, 'chinese-comma', '，', line))
                   # Chinese function particles are suspicious specifically on lines with no Japanese kana.
                   if has_han and not has_kana:
-                      m2 = re.search(r'[这请们吗呢吧没还让给个为从应的了]', line)
+                      m2 = re.search(r'[这请们吗呢吧没还让给个为从应的]', line)
                       if m2:
                           offenders.append((rel, lineno, 'no-kana-chinese-particle', m2.group(0), line))
 
