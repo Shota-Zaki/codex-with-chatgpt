@@ -102,7 +102,7 @@ export class Workspace {
     this.root = real;
     this.id = createHash("sha256").update(normCase(real)).digest("hex").slice(0, 12);
     this.ignoreRules = new IgnoreRules(real);
-    this.projectConfig = parseProjectConfig(readJsonIfExists<unknown>(path.join(real, ".c2c.json")));
+    this.projectConfig = parseProjectConfig(this.readProjectJson(".c2c.json"));
     this.name = this.projectConfig.name ?? path.basename(real);
   }
 
@@ -169,6 +169,17 @@ export class Workspace {
     return { abs: canonical, rel };
   }
 
+  /** Optional metadata obeys the same containment and sensitive-file policy. */
+  private readProjectJson(relativePath: string): unknown {
+    try {
+      const { abs } = this.resolve(relativePath);
+      if (!fs.statSync(abs).isFile()) return null;
+      return readJsonIfExists<unknown>(abs);
+    } catch {
+      return null;
+    }
+  }
+
   private async isBinary(abs: string): Promise<boolean> {
     const fd = await fs.promises.open(abs, "r");
     try {
@@ -216,20 +227,27 @@ export class Workspace {
 
     const stream = fs.createReadStream(abs, { encoding: "utf8" });
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
-    for await (const line of rl) {
-      totalLines++;
-      if (totalLines >= startLine && totalLines <= endLimit && !byteTruncated) {
-        const cost = Buffer.byteLength(line, "utf8") + 1;
-        if (collectedBytes + cost > maxBytes && lines.length > 0) {
-          byteTruncated = true;
-        } else {
-          lines.push(line);
-          collectedBytes += cost;
-          actualEnd = totalLines;
+    try {
+      for await (const line of rl) {
+        totalLines++;
+        if (totalLines >= startLine && totalLines <= endLimit && !byteTruncated) {
+          const cost = Buffer.byteLength(line, "utf8") + 1;
+          if (collectedBytes + cost > maxBytes) {
+            if (lines.length === 0) {
+              throw new WorkspaceError("FILE_TOO_LARGE", `Line ${totalLines} exceeds the response byte limit: ${rel}`);
+            }
+            byteTruncated = true;
+          } else {
+            lines.push(line);
+            collectedBytes += cost;
+            actualEnd = totalLines;
+          }
         }
       }
+    } finally {
+      rl.close();
+      stream.destroy();
     }
-    rl.close();
 
     const remaining = Math.max(0, totalLines - actualEnd);
     return {
@@ -315,7 +333,13 @@ export class Workspace {
     packageManager: string | null;
     scripts: Record<string, string>;
   } {
-    const has = (f: string): boolean => fs.existsSync(path.join(this.root, f));
+    const has = (f: string): boolean => {
+      try {
+        return fs.statSync(this.resolve(f).abs).isFile();
+      } catch {
+        return false;
+      }
+    };
     const languages = new Set<string>();
     const frameworks = new Set<string>();
     let projectType = "unknown";
@@ -325,7 +349,7 @@ export class Workspace {
     if (has("package.json")) {
       projectType = "node";
       languages.add("JavaScript");
-      const rawPackage = readJsonIfExists<unknown>(path.join(this.root, "package.json"));
+      const rawPackage = this.readProjectJson("package.json");
       const pkg = rawPackage && typeof rawPackage === "object" && !Array.isArray(rawPackage)
         ? rawPackage as Record<string, unknown>
         : {};
