@@ -187,6 +187,9 @@ export function gitDiff(
   // 1. Full-workspace inventory using NUL separation and global rename detection
   const listArgs = [
     "diff",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--relative",
     "--name-status",
     "-z",
     "--find-renames=1%",
@@ -260,6 +263,9 @@ export function gitDiff(
     const pathspecs = batch.map((p) => `:(literal)${p}`);
     const diffArgs = [
       "diff",
+      "--no-ext-diff",
+      "--no-textconv",
+      "--relative",
       "--no-color",
       "--find-renames=1%",
       ...modeArgs,
@@ -301,7 +307,10 @@ export function gitDiff(
   }
 
   const full = Buffer.from(combinedDiff, "utf8");
-  const slice = full.subarray(offset, offset + maxBytes);
+  let end = Math.min(full.length, offset + maxBytes);
+  // Returned nextOffset values must not land inside a UTF-8 code point.
+  while (end > offset && end < full.length && (full[end] & 0xc0) === 0x80) end--;
+  const slice = full.subarray(offset, end);
   let text = slice.toString("utf8");
   let sliceLen = slice.length;
   // Avoid cutting mid-line when more content follows.
