@@ -86,6 +86,7 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
   if (host !== "127.0.0.1" && host !== "::1" && host !== "localhost") {
     throw new Error("The bridge only binds to loopback addresses. Public exposure goes through the tunnel.");
   }
+  const urlHost = host === "::1" ? "[::1]" : host;
 
   const authStore = new AuthStore(workspace.id, { file: opts.authStoreFile });
   const pairing = new PairingManager(workspace.id, { ttlMs: opts.pairingTtlMs });
@@ -100,7 +101,7 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
   const getBaseUrl = (req: Request): string => {
     if (publicBaseUrl) return publicBaseUrl;
     const proto = req.protocol;
-    const hostHeader = req.get("host") ?? `${host}:${port}`;
+    const hostHeader = req.get("host") ?? `${urlHost}:${port}`;
     return `${proto}://${hostHeader}`;
   };
 
@@ -269,7 +270,7 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
     pairing,
     tunnel,
     getPublicBaseUrl: () => publicBaseUrl,
-    localBaseUrl: () => `http://${host}:${port}`,
+    localBaseUrl: () => `http://${urlHost}:${port}`,
     close: shutdown,
   };
 }
