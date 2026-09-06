@@ -51,17 +51,17 @@ export function namedTunnelBinding(state: TunnelState): { tunnelName: string; ho
   return { tunnelName: state.tunnelName, hostname: state.hostname };
 }
 
-export const TUNNEL_CHOICE_PROMPT = `连 ChatGPT 之前，有一条可选的。
-你有没有 Cloudflare 账号，并且有没有一个域名已经加在 Cloudflare 里？
-- 有：可以用固定域名。插件配一次，以后电脑重启一般不用再改插件。要登录一次 Cloudflare，并在你的域名下加一个子域名。
-- 没有：用临时地址。不用注册，功能一样。但电脑重启后地址常会变，ChatGPT 里的旧地址会失效。我会自己删掉这个项目的插件、用新地址再加回去，你偶尔要再登一下 ChatGPT。能修好，只是更慢。
-没有账号也完全能用。你选哪个？如果有域名，直接告诉我域名（例如 example.com）。`;
+export const TUNNEL_CHOICE_PROMPT = `ChatGPTへ接続する前に、接続方法を一度だけ選択してください。
+Cloudflareアカウントがあり、Cloudflareに登録済みのドメインを持っていますか？
+- ある：固定ドメインを使用できます。最初に一度だけCloudflareへログインし、ドメイン配下にサブドメインを追加します。通常はPCを再起動してもChatGPT側の接続設定を変更する必要がありません。
+- ない：一時アドレスを使用します。登録不要で機能は同じですが、PC再起動後などにアドレスが変わることがあります。その場合は、このプロジェクトの接続だけを新しいアドレスで作り直します。
+Cloudflareアカウントがなくても利用できます。どちらにしますか？ドメインがある場合は example.com のように入力してください。`;
 
 export const NAMED_LOGIN_PROMPT =
-  "会弹出浏览器，请登录 Cloudflare 并选中你的域名，完成后告诉我「好了」。";
+  "ブラウザが開きます。Cloudflareへログインして対象ドメインを選択し、完了したら「完了」と伝えてください。";
 
 export const NAMED_FALLBACK_MESSAGE =
-  "这次先用临时地址。功能一样，以后修连接可能会更慢。想改成固定域名时再说一声。";
+  "今回は一時アドレスを使用します。機能は同じです。固定ドメインへ切り替えたい場合は、後から変更できます。";
 
 export const NAMED_REPAIR_MESSAGE =
-  "固定域名暂时连不上。请在即将弹出的窗口登录 Cloudflare，选中你的域名，完成后告诉我「好了」。";
+  "固定ドメインへ現在接続できません。これから開く画面でCloudflareへログインして対象ドメインを選択し、完了したら「完了」と伝えてください。";
