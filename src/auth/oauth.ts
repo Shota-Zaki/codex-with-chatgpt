@@ -356,6 +356,8 @@ export function createOAuthRouter(deps: OAuthDeps): Router {
   // ---- Token endpoint --------------------------------------------------------
 
   router.post("/oauth/token", urlencoded({ extended: false }), json(), (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Pragma", "no-cache");
     const body = req.body as Record<string, string | undefined>;
     const grantType = body.grant_type;
 
