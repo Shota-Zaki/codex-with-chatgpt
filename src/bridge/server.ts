@@ -95,7 +95,6 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
   let publicBaseUrl: string | null = null;
 
   const app = express();
-  app.set("trust proxy", true);
   app.disable("x-powered-by");
 
   const getBaseUrl = (req: Request): string => {
@@ -105,10 +104,10 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
     return `${proto}://${hostHeader}`;
   };
 
-  // ---- Health (public but minimal) ---------------------------------------
+  // ---- Health (public and intentionally anonymous) -----------------------
 
   app.get("/health", (_req, res) => {
-    res.json({ service: SERVICE_NAME, version: VERSION, workspaceId: workspace.id, status: "ok" });
+    res.json({ service: SERVICE_NAME, status: "ok" });
   });
 
   // ---- OAuth + discovery ---------------------------------------------------
@@ -208,6 +207,26 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
     setTimeout(() => {
       void shutdown().then(() => process.exit(0));
     }, 100);
+  });
+
+  // Never expose Express/body-parser exception text or stack traces through
+  // public routes. Local authenticated admin routes may still return their
+  // deliberately handled diagnostics above.
+  app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+    const statusValue =
+      typeof error === "object" && error !== null && "status" in error
+        ? (error as { status?: unknown }).status
+        : undefined;
+    const status =
+      typeof statusValue === "number" && statusValue >= 400 && statusValue < 500
+        ? statusValue
+        : 500;
+    logger.error("Unhandled bridge request error");
+    res.status(status).json({ error: status >= 500 ? "internal_error" : "invalid_request" });
   });
 
   const { server, port } = await listen(app, host, opts.port ?? DEFAULT_PORT);

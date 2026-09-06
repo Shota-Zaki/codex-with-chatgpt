@@ -5,6 +5,7 @@ import { startBridge } from "../src/bridge/server.js";
 import {
   findBridgeObservation,
   findLiveBridge,
+  readRuntimeState,
   writeRuntimeState,
   type RuntimeState,
 } from "../src/bridge/runtime.js";
@@ -91,7 +92,7 @@ describe("findBridgeObservation", () => {
     }
   });
 
-  it("reports healthy when the local bridge answers", async () => {
+  it("reports healthy when the local bridge answers with authenticated identity", async () => {
     dirs.push(isolateStateDir());
     const root = makeTmpDir("obs-live");
     dirs.push(root);
@@ -108,6 +109,33 @@ describe("findBridgeObservation", () => {
       const observation = await findBridgeObservation(bridge.workspace.id);
       expect(observation.state).toBe("healthy");
       expect(await findLiveBridge(bridge.workspace.id)).not.toBeNull();
+    } finally {
+      await bridge.close();
+    }
+  });
+
+  it("does not trust anonymous health when the runtime admin token is wrong", async () => {
+    dirs.push(isolateStateDir());
+    const root = makeTmpDir("obs-wrong-admin");
+    dirs.push(root);
+    write(root, "a.txt", "a");
+    const auth = path.join(makeTmpDir("obs-wrong-admin-auth"), "store.json");
+    dirs.push(path.dirname(auth));
+    const bridge = await startBridge({
+      workspaceRoot: root,
+      port: 0,
+      persistRuntime: true,
+      authStoreFile: auth,
+    });
+    try {
+      const runtime = readRuntimeState(bridge.workspace.id);
+      expect(runtime).not.toBeNull();
+      writeRuntimeState({ ...runtime!, adminToken: "wrong-admin-token" });
+
+      const observation = await findBridgeObservation(bridge.workspace.id);
+      expect(observation.state).toBe("unknown");
+      if (observation.state === "unknown") expect(observation.reason).toBe("probe_failed");
+      expect(await findLiveBridge(bridge.workspace.id)).toBeNull();
     } finally {
       await bridge.close();
     }

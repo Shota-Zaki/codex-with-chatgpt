@@ -52,6 +52,10 @@ export type VerifyTokenResult =
   | { ok: true; record: TokenRecord }
   | { ok: false; reason: "unknown" | "expired" | "revoked" | "wrong_kind" };
 
+export type ScopeParseResult =
+  | { ok: true; scopes: string[] }
+  | { ok: false; unsupported: string[] };
+
 const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const AUTH_CODE_TTL_MS = 5 * 60 * 1000;
@@ -126,6 +130,10 @@ export class AuthStore {
 
   getClient(clientId: string): ClientRegistration | undefined {
     return this.clients.get(clientId);
+  }
+
+  clientCount(): number {
+    return this.clients.size;
   }
 
   // ---- Authorization codes ----------------------------------------------
@@ -270,9 +278,12 @@ export class AuthStore {
   }
 }
 
-export function filterScopes(requested: string | undefined): string[] {
-  if (!requested || requested.trim() === "") return [...SUPPORTED_SCOPES];
-  const asked = requested.split(/[\s+]+/).filter(Boolean);
-  const granted = asked.filter((scope) => (SUPPORTED_SCOPES as readonly string[]).includes(scope));
-  return granted.length > 0 ? granted : [...SUPPORTED_SCOPES];
+export function parseRequestedScopes(requested: string | undefined): ScopeParseResult {
+  if (!requested?.trim()) return { ok: true, scopes: [...SUPPORTED_SCOPES] };
+  const asked = [...new Set(requested.split(/[\s+]+/).filter(Boolean))];
+  const unsupported = asked.filter(
+    (scope) => !(SUPPORTED_SCOPES as readonly string[]).includes(scope)
+  );
+  if (unsupported.length > 0) return { ok: false, unsupported };
+  return { ok: true, scopes: asked };
 }
