@@ -1,6 +1,6 @@
 # Codex with ChatGPT
 
-**English** | [简体中文](README.zh-CN.md)
+**English** | [日本語](README.ja.md)
 
 > ChatGPT thinks. Codex works.
 
@@ -61,8 +61,8 @@ refuses dirty checkouts and validates the candidate before fast-forwarding.
 2. Copy `skill/SKILL.md` to `~/.agents/skills/codex-with-chatgpt/SKILL.md`
    (Windows: `%USERPROFILE%\.agents\skills\codex-with-chatgpt\SKILL.md`) and set
    its checkout path to that shared checkout.
-3. Tell Codex: **"使用 Codex with ChatGPT 完成首次配置。"**
-4. After that: **"使用 Codex with ChatGPT，帮我实现 XXX。"**
+3. Tell Codex: **"Codex with ChatGPTを使って、このRepositoryの初回設定をして。"**
+4. After that: **"Codex with ChatGPTを使って、XXXを実装して。"**
 
 Do not copy the C2C checkout into each application repository. One repository
 must map to one workspace boundary; repositories must not share OAuth/token
