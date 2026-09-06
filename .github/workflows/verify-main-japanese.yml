@@ -24,8 +24,8 @@ jobs:
           tracked = subprocess.check_output(['git','ls-files','-z']).decode().split('\0')
           tracked = [p for p in tracked if p]
 
-          # Simplified-Chinese-only glyphs that should not appear in Japanese-localized sources.
-          simplified = set('这请仅个开关连对过说读录发轮设选记无该库页环启码终复统储签权认显项目业东时们为从应习组远边处刚运临删续话现总览试务证线验载标称语义议错误网络级备览层换达处类则进还让给将带问响应况际轻够顺稳续调输创获择认显转断暂码复')
+          # Characters whose simplified forms are not normal Japanese orthography.
+          simplified_only = set('这请仅个开关连对过说读录发轮设选记无该页环启码终复统储签权认显项业东时们为从应习组远边处刚运临删续话现总览试务证线验载标称语义议错误网络级层换达类则进还让给问响应况际轻够顺稳调输创获择转暂')
 
           chinese_patterns = [
               r'使用\s*Codex with ChatGPT', r'完成首次配置', r'首次连接', r'请回复', r'请登录',
@@ -37,11 +37,12 @@ jobs:
               r'已连接', r'文件读取测试通过', r'已断开', r'当前使用', r'已登录', r'已选用',
           ]
           pattern_re = re.compile('|'.join(f'(?:{p})' for p in chinese_patterns))
-          fullwidth_comma = '，'
 
           offenders = []
-          cjk_lines = []
-          pure_han_candidates = []
+          no_kana_candidates = []
+          utf8_files = 0
+          cjk_lines = 0
+
           for rel in tracked:
               path = root / rel
               if not path.is_file() or path.stat().st_size > 1_000_000:
@@ -50,26 +51,33 @@ jobs:
                   text = path.read_text(encoding='utf-8')
               except (UnicodeDecodeError, OSError):
                   continue
+              utf8_files += 1
               for lineno, line in enumerate(text.splitlines(), 1):
-                  if re.search(r'[\u3400-\u4dbf\u4e00-\u9fff]', line):
-                      cjk_lines.append((rel, lineno, line))
-                  found = sorted(set(line) & simplified)
+                  has_han = bool(re.search(r'[\u3400-\u4dbf\u4e00-\u9fff]', line))
+                  has_kana = bool(re.search(r'[\u3040-\u30ff]', line))
+                  if has_han:
+                      cjk_lines += 1
+                      if not has_kana:
+                          no_kana_candidates.append((rel, lineno, line))
+                  found = sorted(set(line) & simplified_only)
                   if found:
-                      offenders.append((rel, lineno, 'simplified-glyph', ''.join(found), line))
+                      offenders.append((rel, lineno, 'simplified-only-glyph', ''.join(found), line))
                   m = pattern_re.search(line)
                   if m:
                       offenders.append((rel, lineno, 'chinese-pattern', m.group(0), line))
-                  if fullwidth_comma in line:
-                      offenders.append((rel, lineno, 'chinese-comma', fullwidth_comma, line))
-                  # Candidate only: long Han-only sequences with no Japanese kana nearby.
-                  if re.search(r'[\u4e00-\u9fff]{6,}', line) and not re.search(r'[\u3040-\u30ff]', line):
-                      pure_han_candidates.append((rel, lineno, line))
+                  if '，' in line:
+                      offenders.append((rel, lineno, 'chinese-comma', '，', line))
+                  # Chinese function particles are suspicious specifically on lines with no Japanese kana.
+                  if has_han and not has_kana:
+                      m2 = re.search(r'[这请们吗呢吧没还让给个为从应的了]', line)
+                      if m2:
+                          offenders.append((rel, lineno, 'no-kana-chinese-particle', m2.group(0), line))
 
-          print(f'Tracked UTF-8 files scanned: {len(tracked)}')
-          print(f'CJK-containing lines: {len(cjk_lines)}')
-          print(f'Long Han-only candidate lines: {len(pure_han_candidates)}')
-          for rel, lineno, line in pure_han_candidates:
-              print(f'CANDIDATE {rel}:{lineno}: {line[:300]}')
+          print(f'Tracked UTF-8 files scanned: {utf8_files}')
+          print(f'CJK-containing lines: {cjk_lines}')
+          print(f'CJK lines with no Japanese kana: {len(no_kana_candidates)}')
+          for rel, lineno, line in no_kana_candidates:
+              print(f'CANDIDATE {rel}:{lineno}: {line[:400]}')
 
           if offenders:
               print('\nChinese-remnant offenders:')
