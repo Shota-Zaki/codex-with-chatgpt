@@ -32,3 +32,7 @@ Workspace単位JSONL/indexは維持し、record/output metadataに任意の `rep
 ## Update policy
 
 upstreamはcommit単位で監査し、Hardened Forkの固定dependency、Security hardening、日本語化、手動検証Update policyを優先する。upstream versionはFork prerelease suffixで表現し、単純mergeしない。
+
+## Reconnect pairing
+
+`c2c doctor` は再接続に必要な状態診断・Tunnel/Connector修復情報の提示までを担当し、Connector再作成時のpairing codeは発行しない。pairing codeはChatGPTの認証フォームが表示された時点で `c2c pair -w <workspace> --json` からfresh発行し、期限切れ・使い捨てcodeの先行消費を避ける。初回 `c2c setup` のpairing発行は既存互換として維持する。
