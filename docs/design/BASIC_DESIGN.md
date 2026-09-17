@@ -10,7 +10,9 @@
 
 ## Approved Root resolution
 
-`c2c roots add <path>` でcanonical directoryを端末共通registryへ追加し、そのRootをDefault Rootにする。通常の`c2c`実行で`--workspace`が省略された場合は、現在Directoryを含むApproved Rootのうち最も深いRootを使用する。該当RootがなければDefault Rootを使用し、registryが空なら従来どおりcurrent directoryを使用する。
+Windowsでは `C:\project` をzero-configの標準Rootとする。Approved Root registryが空で、`C:\project` が実在し、現在Directoryがその配下にある場合は、初回のWorkspace利用commandでcanonical `C:\project` をApproved Rootへ自動登録してDefault Rootにする。これにより通常利用では `roots add` を要求しない。
+
+標準Rootを使わない場合は `c2c roots add <path>` でcanonical directoryを端末共通registryへ追加し、そのRootをDefault Rootにする。通常の`c2c`実行で`--workspace`が省略された場合は、現在Directoryを含むApproved Rootのうち最も深いRootを使用する。該当RootがなければDefault Rootを使用し、registryが空かつzero-config Rootが適用されない場合は従来どおりcurrent directoryを使用する。
 
 明示 `--workspace` は常に優先する。Approved RootはRepository Contextを統合しないため、Git/Execution identityとRepository confinementは既存どおりRepository単位で維持する。
 
@@ -22,7 +24,7 @@
 
 ## Compatibility
 
-Approved Root未設定時は従来挙動を維持する。単一Repository時は既存呼び出しのselector省略を許可する。Repository IDはstandalone Workspace IDと同じ算出方式とし、既存execution historyを引き継ぐ。
+`C:\project` が存在しない、または現在Directoryがその配下でない状態でApproved Root未設定なら従来挙動を維持する。単一Repository時は既存呼び出しのselector省略を許可する。Repository IDはstandalone Workspace IDと同じ算出方式とし、既存execution historyを引き継ぐ。
 
 ## References
 

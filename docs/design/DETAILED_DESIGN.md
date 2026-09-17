@@ -4,12 +4,15 @@
 
 `bin/workspace-roots.js` が端末共通のApproved Root registryを担当し、OSごとのC2C state directory配下 `workspace-roots.json` に保存する。`C2C_STATE_DIR` が指定される場合は既存のstate override規約に従う。
 
+- Windows zero-config root: `C:\project`。registryが空、Rootが実在、current directoryがその配下という3条件を満たした最初のWorkspace解決時にcanonical Rootを自動登録しDefault化する。
+- `C2C_DEFAULT_WORKSPACE_ROOT`: test/portable environment向けにzero-config候補を上書きできる。通常Windows利用では設定不要。
 - `c2c roots add <path>`: canonical realpathを重複排除して追加し、Default Rootへ設定する。
 - `c2c roots list`: Approved Root一覧とDefault Rootを表示する。
 - `c2c roots remove <path>`: Rootを削除し、Default削除時は残存RootをDefaultへ選び直す。
 - `c2c roots default <path>`: 既にApprovedなRootだけをDefaultへ変更する。
 - `c2c roots resolve`: current directoryに適用されるRootを確認する。
-- 通常command: 明示 `--workspace` > current directoryを含む最深Approved Root > Default Root > current directory の優先順。
+- 通常command: 明示 `--workspace` > current directoryを含む最深Approved Root > Default Root > zero-config bootstrap > current directory の優先順。
+- zero-config bootstrapはcurrent directoryが候補Root配下の場合だけ実行し、候補Root外から暗黙に認可境界を拡張しない。
 - machine-wide command (`prefs`, `sandbox-allow`, `update-check`, `tunnel login`, `roots`) にはWorkspaceを注入しない。
 - registryはowner-onlyを意図したmodeでatomic writeし、Windows等chmod semanticsがない環境ではbest effortとする。
 

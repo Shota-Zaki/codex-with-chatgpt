@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   approveWorkspaceRoot,
+  implicitWorkspaceRoot,
   readWorkspaceRoots,
   removeWorkspaceRoot,
   resolveApprovedWorkspaceRoot,
@@ -17,9 +18,12 @@ describe("machine-wide Approved Roots", () => {
   let outside: string;
   let stateDir: string;
   let previousStateDir: string | undefined;
+  let previousDefaultWorkspaceRoot: string | undefined;
 
   beforeEach(() => {
     previousStateDir = process.env.C2C_STATE_DIR;
+    previousDefaultWorkspaceRoot = process.env.C2C_DEFAULT_WORKSPACE_ROOT;
+    delete process.env.C2C_DEFAULT_WORKSPACE_ROOT;
     stateDir = makeTmpDir("workspace-roots-state");
     process.env.C2C_STATE_DIR = stateDir;
     root = makeTmpDir("workspace-roots-dev");
@@ -31,6 +35,8 @@ describe("machine-wide Approved Roots", () => {
   afterEach(() => {
     if (previousStateDir === undefined) delete process.env.C2C_STATE_DIR;
     else process.env.C2C_STATE_DIR = previousStateDir;
+    if (previousDefaultWorkspaceRoot === undefined) delete process.env.C2C_DEFAULT_WORKSPACE_ROOT;
+    else process.env.C2C_DEFAULT_WORKSPACE_ROOT = previousDefaultWorkspaceRoot;
     cleanup(root);
     cleanup(outside);
     cleanup(stateDir);
@@ -44,6 +50,26 @@ describe("machine-wide Approved Roots", () => {
     expect(readWorkspaceRoots()).toEqual(config);
     expect(resolveApprovedWorkspaceRoot(path.join(root, "team", "repo"))).toBe(config.defaultRoot);
     expect(resolveApprovedWorkspaceRoot(outside)).toBe(config.defaultRoot);
+  });
+
+  it("zero-config bootstraps the conventional root when running inside it", () => {
+    process.env.C2C_DEFAULT_WORKSPACE_ROOT = root;
+    expect(readWorkspaceRoots().approvedRoots).toEqual([]);
+    expect(implicitWorkspaceRoot()).toBe(fs.realpathSync.native(root));
+
+    const resolved = resolveApprovedWorkspaceRoot(path.join(root, "team", "repo"));
+    expect(resolved).toBe(fs.realpathSync.native(root));
+    expect(readWorkspaceRoots()).toEqual({
+      schemaVersion: 1,
+      approvedRoots: [fs.realpathSync.native(root)],
+      defaultRoot: fs.realpathSync.native(root),
+    });
+  });
+
+  it("does not auto-approve the conventional root when running outside it", () => {
+    process.env.C2C_DEFAULT_WORKSPACE_ROOT = root;
+    expect(resolveApprovedWorkspaceRoot(outside)).toBeNull();
+    expect(readWorkspaceRoots().approvedRoots).toEqual([]);
   });
 
   it("chooses the deepest approved root for a repository nested under multiple roots", () => {

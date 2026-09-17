@@ -4,6 +4,7 @@ import path from "node:path";
 
 const CASE_INSENSITIVE = process.platform === "win32" || process.platform === "darwin";
 const CONFIG_SCHEMA_VERSION = 1;
+const WINDOWS_ZERO_CONFIG_ROOT = "C:\\project";
 
 function normCase(value) {
   return CASE_INSENSITIVE ? value.toLowerCase() : value;
@@ -144,6 +145,17 @@ export function setDefaultWorkspaceRoot(input) {
   return writeWorkspaceRoots({ approvedRoots: current.approvedRoots, defaultRoot: root });
 }
 
+export function implicitWorkspaceRoot() {
+  const override = process.env.C2C_DEFAULT_WORKSPACE_ROOT?.trim();
+  const candidate = override || (process.platform === "win32" ? WINDOWS_ZERO_CONFIG_ROOT : "");
+  if (!candidate) return null;
+  try {
+    return canonicalDirectory(candidate);
+  } catch {
+    return null;
+  }
+}
+
 export function resolveApprovedWorkspaceRoot(cwd = process.cwd()) {
   let canonicalCwd;
   try {
@@ -165,6 +177,14 @@ export function resolveApprovedWorkspaceRoot(cwd = process.cwd()) {
   if (containing.length > 0) return containing[0];
   if (current.defaultRoot && existingRoots.some((root) => samePath(root, current.defaultRoot))) {
     return current.defaultRoot;
+  }
+
+  if (current.approvedRoots.length === 0) {
+    const implicit = implicitWorkspaceRoot();
+    if (implicit && isInside(implicit, canonicalCwd)) {
+      approveWorkspaceRoot(implicit, { makeDefault: true });
+      return implicit;
+    }
   }
   return null;
 }

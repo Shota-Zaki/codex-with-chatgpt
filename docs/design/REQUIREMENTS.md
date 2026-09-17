@@ -3,7 +3,8 @@
 ## Functional
 
 - ChatGPT C2C MCPはread-onlyを維持し、Software Engineering実行はCodexへ限定する。
-- 端末共通のApproved Rootを1回登録でき、以後はRepositoryごとのWorkspace指定を要求しない。
+- Windowsでは `C:\project` が存在し、現在Directoryがその配下なら、Approved Root未設定の初回利用時に `C:\project` を自動登録してDefault Rootとする。
+- Windows標準Rootを使わない環境では、端末共通Approved Rootを `c2c roots add <path>` で登録でき、以後はRepositoryごとのWorkspace指定を要求しない。
 - 複数Approved Rootがある場合、現在Directoryを含む最も深いRootを優先し、該当しない場合はDefault Rootを使用する。
 - 明示 `--workspace` は端末共通設定より優先し、既存の単一Workspace運用を維持する。
 - 1 Workspaceで1個以上のRepository Contextを扱える。
@@ -16,7 +17,8 @@
 
 ## Security
 
-- Approved Root登録はローカルCLIからの明示操作とし、canonical realpathを保存する。
+- `C:\project` の自動登録はApproved Root registryが空で、現在Directoryがそのcanonical Root配下にある場合だけ行い、別Directoryから暗黙に認可範囲を拡張しない。
+- 手動Approved Root登録はローカルCLIから行い、canonical realpathを保存する。
 - 端末共通Root選択後もWorkspace authorization boundary、canonical realpath confinement、symlink escape防止を維持する。
 - Repository selectorはWorkspace外を認可しない。Repository-confined pathはRepository境界を再検証する。
 - Secret/Credential/Token/OAuth保護、Credential masking、outbound sanitizer、`.c2cignore`を維持する。
