@@ -4,7 +4,20 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { Workspace, WorkspaceError } from "../workspace/manager.js";
 import { SearchError, searchWorkspace } from "../workspace/search.js";
 import { gitDiff, gitInfo, gitStatus, type DiffMode } from "../workspace/git.js";
-import { executionRecordSchema, latestExecutionRecord, readExecutionRecords } from "../execution/records.js";
+import {
+  RepositorySelectionError,
+  discoverRepositories,
+  resolveRepositoryPath,
+  selectRepository,
+  type RepositoryContext,
+} from "../workspace/repositories.js";
+import {
+  executionRecordSchema,
+  latestExecutionRecord,
+  latestRepositoryExecutionRecord,
+  readExecutionRecords,
+  readRepositoryExecutionRecords,
+} from "../execution/records.js";
 import { listExecutionOutputs, readExecutionOutput } from "../execution/output.js";
 import { sanitizeOutboundText } from "../security/outbound-sanitize.js";
 import type { Logger } from "../logger/index.js";
@@ -88,6 +101,7 @@ function safeFailure(code: string, message: string): ToolResult {
 
 function mapError(error: unknown): ToolResult {
   if (error instanceof WorkspaceError) return safeFailure(error.code, error.message);
+  if (error instanceof RepositorySelectionError) return safeFailure(error.code, error.message);
   if (error instanceof SearchError) return safeFailure(error.code, error.message);
   return fail("INTERNAL_ERROR", "Request failed.");
 }
@@ -108,6 +122,23 @@ const gitIdentityOutputSchema = z.object({
   dirty: z.boolean(),
 });
 
+const repositoryIdentityOutputSchema = {
+  repositoryId: z.string(),
+  repositoryName: z.string(),
+  repositoryRoot: z.string(),
+};
+
+const repositoryInfoOutputSchema = z.object({
+  ...repositoryIdentityOutputSchema,
+  rootAlias: z.string(),
+  projectType: z.string(),
+  languages: z.array(z.string()),
+  frameworks: z.array(z.string()),
+  packageManager: z.string().nullable(),
+  scripts: z.record(z.string()),
+  git: gitIdentityOutputSchema,
+});
+
 const workspaceInfoOutputSchema = {
   workspaceId: z.string(),
   workspaceName: z.string(),
@@ -118,6 +149,8 @@ const workspaceInfoOutputSchema = {
   packageManager: z.string().nullable(),
   scripts: z.record(z.string()),
   git: gitIdentityOutputSchema,
+  repositoryCount: z.number().int().nonnegative(),
+  repositories: z.array(repositoryInfoOutputSchema),
 };
 
 const directoryEntryOutputSchema = z.object({
@@ -166,6 +199,7 @@ const gitChangeOutputSchema = z.object({
 });
 
 const gitStatusOutputSchema = {
+  ...repositoryIdentityOutputSchema,
   isRepo: z.boolean(),
   branch: z.string().nullable(),
   upstream: z.string().nullable(),
@@ -175,9 +209,14 @@ const gitStatusOutputSchema = {
   unstaged: z.array(gitChangeOutputSchema),
   untracked: z.array(z.string()),
   conflicted: z.array(z.string()),
+  hidden: z.object({
+    changes: z.number().int().nonnegative(),
+    conflicts: z.number().int().nonnegative(),
+  }),
 };
 
 const gitDiffOutputSchema = {
+  ...repositoryIdentityOutputSchema,
   isRepo: z.boolean(),
   mode: z.enum(["unstaged", "staged", "head"]),
   totalBytes: z.number().int().nonnegative(),
@@ -189,6 +228,7 @@ const gitDiffOutputSchema = {
 };
 
 const testStatusOutputSchema = {
+  ...repositoryIdentityOutputSchema,
   available: z.boolean(),
   message: z.string().optional(),
   taskId: z.string().optional(),
@@ -201,6 +241,7 @@ const testStatusOutputSchema = {
 };
 
 const executionSummaryOutputSchema = {
+  ...repositoryIdentityOutputSchema,
   records: z.array(executionRecordSchema),
 };
 
@@ -211,6 +252,8 @@ const executionOutputItemOutputSchema = z.object({
   timestamp: z.string(),
   taskId: z.string().nullable(),
   iteration: z.number().int().nullable(),
+  repositoryId: z.string().optional(),
+  repositoryRoot: z.string().optional(),
   readable: z.boolean(),
   status: z.enum(["readable", "restricted"]),
   truncated: z.boolean(),
@@ -218,6 +261,7 @@ const executionOutputItemOutputSchema = z.object({
 });
 
 const executionOutputOutputSchema = {
+  ...repositoryIdentityOutputSchema,
   action: z.enum(["list", "read"]).describe("The operation represented by this result"),
   items: z.array(executionOutputItemOutputSchema).optional().describe("Recorded output metadata returned by the list operation"),
   id: z.number().int().positive().optional(),
@@ -233,6 +277,44 @@ export interface McpContext {
   logger: Logger;
 }
 
+function repositoryIdentity(repository: RepositoryContext): {
+  repositoryId: string;
+  repositoryName: string;
+  repositoryRoot: string;
+} {
+  return {
+    repositoryId: repository.id,
+    repositoryName: repository.name,
+    repositoryRoot: repository.relativeRoot,
+  };
+}
+
+function repositoryRootAlias(repository: RepositoryContext): string {
+  return repository.relativeRoot === "."
+    ? "workspace:/"
+    : `workspace:/${repository.relativeRoot.replace(/\/$/, "")}/`;
+}
+
+function scopedWorkspacePath(workspace: Workspace, repositorySelector: string | undefined, requested: string): string {
+  if (!repositorySelector) return requested;
+  const repository = selectRepository(workspace, repositorySelector);
+  return resolveRepositoryPath(workspace, repository, requested).workspaceRel;
+}
+
+function selectExecutionRepository(workspace: Workspace, selector?: string): RepositoryContext | null {
+  const repositories = discoverRepositories(workspace);
+  if (repositories.length === 0) {
+    if (selector) {
+      throw new RepositorySelectionError(
+        "REPOSITORY_NOT_FOUND",
+        `Repository '${selector}' is not registered in this Workspace.`
+      );
+    }
+    return null;
+  }
+  return selectRepository(workspace, selector, repositories);
+}
+
 export function createMcpServer(ctx: McpContext): McpServer {
   const { workspace } = ctx;
   const server = new McpServer(
@@ -245,8 +327,8 @@ export function createMcpServer(ctx: McpContext): McpServer {
     {
       title: "Workspace info",
       description:
-        `Get an overview of the connected workspace: identity, project type, languages, ` +
-        `frameworks, git state and available scripts. Call this first. ${UNTRUSTED_NOTE}`,
+        `Get an overview of the connected Workspace and its repositories. Repository ids are ` +
+        `the stable selectors for repository-specific Git and execution tools. Call this first. ${UNTRUSTED_NOTE}`,
       inputSchema: {},
       outputSchema: workspaceInfoOutputSchema,
       annotations: { readOnlyHint: true },
@@ -257,6 +339,15 @@ export function createMcpServer(ctx: McpContext): McpServer {
       try {
         const project = workspace.detectProject();
         const git = gitInfo(workspace.root);
+        const repositories = discoverRepositories(workspace).map((repository) => {
+          const repositoryProject = repository.scope.detectProject();
+          return {
+            ...repositoryIdentity(repository),
+            rootAlias: repositoryRootAlias(repository),
+            ...repositoryProject,
+            git: repository.git,
+          };
+        });
         return okStructured({
           workspaceId: workspace.id,
           workspaceName: workspace.name,
@@ -268,6 +359,8 @@ export function createMcpServer(ctx: McpContext): McpServer {
             commit: git.commit,
             dirty: git.dirty,
           },
+          repositoryCount: repositories.length,
+          repositories,
         });
       } catch (error) {
         return mapError(error);
@@ -280,10 +373,11 @@ export function createMcpServer(ctx: McpContext): McpServer {
     {
       title: "List directory",
       description:
-        `List files and directories under a workspace-relative path. High-noise directories ` +
-        `(node_modules, .git, build output) are omitted. Supports pagination. ${UNTRUSTED_NOTE}`,
+        `List files and directories under a Workspace-relative path. Optionally provide a repository ` +
+        `id/root to confine the request to that repository. High-noise directories are omitted. ${UNTRUSTED_NOTE}`,
       inputSchema: {
-        path: z.string().default(".").describe("Workspace-relative path, e.g. 'src'"),
+        path: z.string().default(".").describe("Workspace-relative path, or repository-relative when repository is set"),
+        repository: z.string().optional().describe("Repository id, name, or Workspace-relative repository root"),
         depth: z.number().int().min(1).max(4).default(1).describe("Recursion depth (1-4)"),
         limit: z.number().int().min(1).max(1000).default(200),
         offset: z.number().int().min(0).default(0),
@@ -295,7 +389,8 @@ export function createMcpServer(ctx: McpContext): McpServer {
       const denied = requireScope(extra.authInfo, "workspace.read");
       if (denied) return denied;
       try {
-        return okStructured(await workspace.listDirectory(args.path, args));
+        const targetPath = scopedWorkspacePath(workspace, args.repository, args.path);
+        return okStructured(await workspace.listDirectory(targetPath, args));
       } catch (error) {
         return mapError(error);
       }
@@ -307,11 +402,12 @@ export function createMcpServer(ctx: McpContext): McpServer {
     {
       title: "Read file",
       description:
-        `Read a text file from the workspace with line-range pagination. Defaults to the first ` +
-        `400 lines; use start_line/end_line to page through large files. Sensitive files ` +
+        `Read a text file with line-range pagination. Optionally provide a repository selector; when ` +
+        `set, path is repository-relative and cannot escape into a sibling repository. Sensitive files ` +
         `(.env, keys, credentials) are always denied. ${UNTRUSTED_NOTE}`,
       inputSchema: {
-        path: z.string().describe("Workspace-relative file path"),
+        path: z.string().describe("Workspace-relative file path, or repository-relative when repository is set"),
+        repository: z.string().optional().describe("Repository id, name, or Workspace-relative repository root"),
         start_line: z.number().int().min(1).optional().describe("1-based first line to return"),
         end_line: z.number().int().min(1).optional().describe("1-based last line to return"),
       },
@@ -322,7 +418,8 @@ export function createMcpServer(ctx: McpContext): McpServer {
       const denied = requireScope(extra.authInfo, "workspace.read");
       if (denied) return denied;
       try {
-        return okStructured(await workspace.readFile(args.path, { startLine: args.start_line, endLine: args.end_line }));
+        const targetPath = scopedWorkspacePath(workspace, args.repository, args.path);
+        return okStructured(await workspace.readFile(targetPath, { startLine: args.start_line, endLine: args.end_line }));
       } catch (error) {
         return mapError(error);
       }
@@ -334,11 +431,12 @@ export function createMcpServer(ctx: McpContext): McpServer {
     {
       title: "Search workspace",
       description:
-        `Search file contents across the workspace (ripgrep when available). Returns matching ` +
-        `lines with file paths and line numbers. ${UNTRUSTED_NOTE}`,
+        `Search file contents across the Workspace or one selected repository (ripgrep when available). ` +
+        `Returns matching lines with file paths and line numbers. ${UNTRUSTED_NOTE}`,
       inputSchema: {
         query: z.string().min(2).describe("Text to search for (literal by default)"),
-        path: z.string().optional().describe("Restrict search to this workspace-relative path"),
+        path: z.string().optional().describe("Restrict search to this path"),
+        repository: z.string().optional().describe("Repository id, name, or Workspace-relative repository root"),
         glob: z.string().optional().describe("Filename glob filter, e.g. '*.ts'"),
         limit: z.number().int().min(1).max(200).default(50),
         regex: z.boolean().default(false).describe("Treat query as a regular expression"),
@@ -350,7 +448,9 @@ export function createMcpServer(ctx: McpContext): McpServer {
       const denied = requireScope(extra.authInfo, "workspace.search");
       if (denied) return denied;
       try {
-        return okStructured(await searchWorkspace(workspace, args));
+        const pathInput = args.path ?? ".";
+        const targetPath = scopedWorkspacePath(workspace, args.repository, pathInput);
+        return okStructured(await searchWorkspace(workspace, { ...args, path: targetPath }));
       } catch (error) {
         return mapError(error);
       }
@@ -361,16 +461,24 @@ export function createMcpServer(ctx: McpContext): McpServer {
     "git_status",
     {
       title: "Git status",
-      description: `Structured git status of the workspace: branch, staged/unstaged/untracked files. ${UNTRUSTED_NOTE}`,
-      inputSchema: {},
+      description:
+        `Structured Git status for one repository. In a multi-repository Workspace, repository is required. ` +
+        `Sensitive/.c2cignore'd paths are withheld and counted in hidden. ${UNTRUSTED_NOTE}`,
+      inputSchema: {
+        repository: z.string().optional().describe("Repository id, name, or Workspace-relative repository root"),
+      },
       outputSchema: gitStatusOutputSchema,
       annotations: { readOnlyHint: true },
     },
-    async (_args, extra) => {
+    async (args, extra) => {
       const denied = requireScope(extra.authInfo, "git.read");
       if (denied) return denied;
       try {
-        return okStructured(gitStatus(workspace.root));
+        const repository = selectRepository(workspace, args.repository);
+        return okStructured({
+          ...repositoryIdentity(repository),
+          ...gitStatus(repository.scope),
+        });
       } catch (error) {
         return mapError(error);
       }
@@ -382,11 +490,12 @@ export function createMcpServer(ctx: McpContext): McpServer {
     {
       title: "Git diff",
       description:
-        `Git diff with byte-offset pagination. mode: 'unstaged' (default), 'staged', or 'head' ` +
-        `(working tree vs HEAD). When hasMore is true, call again with offset=nextOffset. ${UNTRUSTED_NOTE}`,
+        `Git diff for one repository with byte-offset pagination. In a multi-repository Workspace, ` +
+        `repository is required. path is repository-relative. ${UNTRUSTED_NOTE}`,
       inputSchema: {
+        repository: z.string().optional().describe("Repository id, name, or Workspace-relative repository root"),
         mode: z.enum(["unstaged", "staged", "head"]).default("unstaged"),
-        path: z.string().optional().describe("Limit the diff to one workspace-relative path"),
+        path: z.string().optional().describe("Limit the diff to one repository-relative path"),
         offset: z.number().int().min(0).default(0).describe("Byte offset for pagination"),
         max_bytes: z.number().int().min(1024).max(262144).default(65536),
       },
@@ -397,17 +506,18 @@ export function createMcpServer(ctx: McpContext): McpServer {
       const denied = requireScope(extra.authInfo, "git.read");
       if (denied) return denied;
       try {
-        let relPath: string | undefined;
-        if (args.path) {
-          relPath = workspace.resolve(args.path).rel;
-        }
-        return okStructured(
-          gitDiff(
-            workspace,
+        const repository = selectRepository(workspace, args.repository);
+        const relPath = args.path
+          ? resolveRepositoryPath(workspace, repository, args.path).repositoryRel
+          : undefined;
+        return okStructured({
+          ...repositoryIdentity(repository),
+          ...gitDiff(
+            repository.scope,
             { mode: args.mode as DiffMode, offset: args.offset, maxBytes: args.max_bytes },
             relPath
-          )
-        );
+          ),
+        });
       } catch (error) {
         return mapError(error);
       }
@@ -419,29 +529,46 @@ export function createMcpServer(ctx: McpContext): McpServer {
     {
       title: "Test status",
       description:
-        `Summary of the most recent test run reported by the Codex harness. This does NOT run ` +
-        `tests; it reads the latest execution record. ${UNTRUSTED_NOTE}`,
-      inputSchema: {},
+        `Summary of the most recent test/build record for one repository. This does NOT run tests; ` +
+        `it reads execution records written by Codex. In a multi-repository Workspace, repository is required. ${UNTRUSTED_NOTE}`,
+      inputSchema: {
+        repository: z.string().optional().describe("Repository id, name, or Workspace-relative repository root"),
+      },
       outputSchema: testStatusOutputSchema,
       annotations: { readOnlyHint: true },
     },
-    async (_args, extra) => {
+    async (args, extra) => {
       const denied = requireScope(extra.authInfo, "execution.read");
       if (denied) return denied;
-      const latest = latestExecutionRecord(workspace.id);
-      if (!latest) {
-        return okStructured({ available: false, message: "No execution records yet for this workspace." });
+      try {
+        const repository = selectExecutionRepository(workspace, args.repository);
+        const latest = repository
+          ? latestRepositoryExecutionRecord(workspace.id, repository.id)
+          : latestExecutionRecord(workspace.id);
+        const identity = repository
+          ? repositoryIdentity(repository)
+          : { repositoryId: workspace.id, repositoryName: workspace.name, repositoryRoot: "." };
+        if (!latest) {
+          return okStructured({
+            ...identity,
+            available: false,
+            message: "No execution records yet for this repository.",
+          });
+        }
+        return okStructured({
+          ...identity,
+          available: true,
+          taskId: latest.taskId,
+          iteration: latest.iteration,
+          tests: latest.tests,
+          exitStatus: latest.exitStatus,
+          timestamp: latest.timestamp,
+          outputAvailable: Boolean(latest.outputAvailable),
+          outputId: latest.outputId ?? null,
+        });
+      } catch (error) {
+        return mapError(error);
       }
-      return okStructured({
-        available: true,
-        taskId: latest.taskId,
-        iteration: latest.iteration,
-        tests: latest.tests,
-        exitStatus: latest.exitStatus,
-        timestamp: latest.timestamp,
-        outputAvailable: Boolean(latest.outputAvailable),
-        outputId: latest.outputId ?? null,
-      });
     }
   );
 
@@ -450,9 +577,10 @@ export function createMcpServer(ctx: McpContext): McpServer {
     {
       title: "Execution summary",
       description:
-        `Recent Codex execution records for this workspace: task id, iteration, changed files, ` +
-        `tests and exit status. Use it after Codex reports EXECUTED. ${UNTRUSTED_NOTE}`,
+        `Recent Codex execution records for one repository: task id, iteration, changed files, tests and ` +
+        `exit status. In a multi-repository Workspace, repository is required. ${UNTRUSTED_NOTE}`,
       inputSchema: {
+        repository: z.string().optional().describe("Repository id, name, or Workspace-relative repository root"),
         limit: z.number().int().min(1).max(50).default(5),
       },
       outputSchema: executionSummaryOutputSchema,
@@ -461,7 +589,23 @@ export function createMcpServer(ctx: McpContext): McpServer {
     async (args, extra) => {
       const denied = requireScope(extra.authInfo, "execution.read");
       if (denied) return denied;
-      return okStructured({ records: readExecutionRecords(workspace.id, args.limit) });
+      try {
+        const repository = selectExecutionRepository(workspace, args.repository);
+        if (repository) {
+          return okStructured({
+            ...repositoryIdentity(repository),
+            records: readRepositoryExecutionRecords(workspace.id, repository.id, args.limit),
+          });
+        }
+        return okStructured({
+          repositoryId: workspace.id,
+          repositoryName: workspace.name,
+          repositoryRoot: ".",
+          records: readExecutionRecords(workspace.id, args.limit),
+        });
+      } catch (error) {
+        return mapError(error);
+      }
     }
   );
 
@@ -470,10 +614,11 @@ export function createMcpServer(ctx: McpContext): McpServer {
     {
       title: "Execution output",
       description:
-        `List or read command output that Codex chose to record after a test/build/lint/typecheck ` +
-        `run. Call with action=list first, then action=read and an id. Restricted items have no ` +
-        `body. This does not run commands. ${UNTRUSTED_NOTE}`,
+        `List or read command output that Codex chose to record after a test/build/lint/typecheck run. ` +
+        `In a multi-repository Workspace, repository is required and outputs from sibling repositories are hidden. ` +
+        `This does not run commands. ${UNTRUSTED_NOTE}`,
       inputSchema: {
+        repository: z.string().optional().describe("Repository id, name, or Workspace-relative repository root"),
         action: z.enum(["list", "read"]).default("list"),
         id: z.number().int().positive().optional(),
         limit: z.number().int().min(1).max(50).default(20),
@@ -484,39 +629,51 @@ export function createMcpServer(ctx: McpContext): McpServer {
     async (args, extra) => {
       const denied = requireScope(extra.authInfo, "execution.read");
       if (denied) return denied;
-      const action = args.action ?? "list";
-      if (action === "list") {
-        const items = listExecutionOutputs(workspace.id, args.limit).map((item) => ({
-          id: item.id,
-          command: item.command,
-          exitCode: item.exitCode,
-          timestamp: item.timestamp,
-          taskId: item.taskId ?? null,
-          iteration: item.iteration ?? null,
-          readable: item.allowed,
-          status: item.allowed ? "readable" : "restricted",
-          truncated: item.truncated,
-          sizeBytes: item.sizeBytes,
-        }));
-        return okStructured({ action: "list", items });
-      }
-      if (args.id === undefined) return fail("INVALID_ARGUMENTS", "read requires id");
-      const result = readExecutionOutput(workspace.id, args.id);
-      if (!result.ok) {
-        if (result.error === "OUTPUT_RESTRICTED") {
-          return fail("OUTPUT_RESTRICTED", "This output was not released for ChatGPT to read.");
+      try {
+        const repository = selectExecutionRepository(workspace, args.repository);
+        const identity = repository
+          ? repositoryIdentity(repository)
+          : { repositoryId: workspace.id, repositoryName: workspace.name, repositoryRoot: "." };
+        const repositoryId = repository?.id;
+        const action = args.action ?? "list";
+        if (action === "list") {
+          const items = listExecutionOutputs(workspace.id, args.limit, repositoryId).map((item) => ({
+            id: item.id,
+            command: item.command,
+            exitCode: item.exitCode,
+            timestamp: item.timestamp,
+            taskId: item.taskId ?? null,
+            iteration: item.iteration ?? null,
+            repositoryId: item.repositoryId,
+            repositoryRoot: item.repositoryRoot,
+            readable: item.allowed,
+            status: item.allowed ? "readable" : "restricted",
+            truncated: item.truncated,
+            sizeBytes: item.sizeBytes,
+          }));
+          return okStructured({ ...identity, action: "list", items });
         }
-        return fail("NOT_FOUND", `No execution output with id ${args.id}.`);
+        if (args.id === undefined) return fail("INVALID_ARGUMENTS", "read requires id");
+        const result = readExecutionOutput(workspace.id, args.id, repositoryId);
+        if (!result.ok) {
+          if (result.error === "OUTPUT_RESTRICTED") {
+            return fail("OUTPUT_RESTRICTED", "This output was not released for ChatGPT to read.");
+          }
+          return fail("NOT_FOUND", `No execution output with id ${args.id} for this repository.`);
+        }
+        return okStructured({
+          ...identity,
+          action: "read",
+          id: result.meta.id,
+          command: result.meta.command,
+          exitCode: result.meta.exitCode,
+          timestamp: result.meta.timestamp,
+          truncated: result.meta.truncated,
+          text: result.text,
+        });
+      } catch (error) {
+        return mapError(error);
       }
-      return okStructured({
-        action: "read",
-        id: result.meta.id,
-        command: result.meta.command,
-        exitCode: result.meta.exitCode,
-        timestamp: result.meta.timestamp,
-        truncated: result.meta.truncated,
-        text: result.text,
-      });
     }
   );
 

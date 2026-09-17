@@ -14,6 +14,7 @@ export function runGit(root: string, args: string[]): GitCommandResult {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
     timeout: 30_000,
+    windowsHide: true,
   });
   return {
     ok: result.status === 0,
@@ -48,6 +49,13 @@ export function gitInfo(root: string): GitInfo {
   };
 }
 
+export interface WorkspaceLike {
+  root: string;
+  ignoreRules?: IgnoreRules;
+}
+
+export type GitTarget = string | WorkspaceLike;
+
 export interface GitStatusResult {
   isRepo: boolean;
   branch: string | null;
@@ -58,9 +66,14 @@ export interface GitStatusResult {
   unstaged: { path: string; change: string }[];
   untracked: string[];
   conflicted: string[];
+  /** Sensitive entries withheld. Conflicts stay separate so a merge is not reported as clean. */
+  hidden: { changes: number; conflicts: number };
 }
 
-export function gitStatus(root: string): GitStatusResult {
+export function gitStatus(target: GitTarget): GitStatusResult {
+  const root = typeof target === "string" ? target : target.root;
+  const ignoreRules =
+    typeof target === "object" && target.ignoreRules ? target.ignoreRules : new IgnoreRules(root);
   const empty: GitStatusResult = {
     isRepo: false,
     branch: null,
@@ -71,36 +84,48 @@ export function gitStatus(root: string): GitStatusResult {
     unstaged: [],
     untracked: [],
     conflicted: [],
+    hidden: { changes: 0, conflicts: 0 },
   };
   const result = runGit(root, ["status", "--porcelain=v2", "--branch", "--", "."]);
   if (!result.ok) return empty;
-  const out: GitStatusResult = { ...empty, isRepo: true };
+  const out: GitStatusResult = { ...empty, hidden: { ...empty.hidden }, isRepo: true };
+  const withheld = (paths: string[]): boolean => paths.some((filePath) => ignoreRules.isSensitive(filePath));
+
   for (const line of result.stdout.split("\n")) {
     if (line.startsWith("# branch.head ")) {
       out.branch = line.slice("# branch.head ".length).trim();
     } else if (line.startsWith("# branch.upstream ")) {
       out.upstream = line.slice("# branch.upstream ".length).trim();
     } else if (line.startsWith("# branch.ab ")) {
-      const m = line.match(/\+(\d+) -(\d+)/);
-      if (m) {
-        out.ahead = parseInt(m[1], 10);
-        out.behind = parseInt(m[2], 10);
+      const match = line.match(/\+(\d+) -(\d+)/);
+      if (match) {
+        out.ahead = parseInt(match[1], 10);
+        out.behind = parseInt(match[2], 10);
       }
     } else if (line.startsWith("1 ") || line.startsWith("2 ")) {
       const parts = line.split(" ");
-      const xy = parts[1];
-      const filePath = line.startsWith("2 ")
-        ? line.split("\t")[0]?.split(" ").slice(9).join(" ") + " -> " + (line.split("\t")[1] ?? "")
+      const xy = parts[1] ?? "";
+      const isRename = line.startsWith("2 ");
+      const destination = isRename
+        ? (line.split("\t")[0]?.split(" ").slice(9).join(" ") ?? "")
         : parts.slice(8).join(" ");
-      const x = xy[0];
-      const y = xy[1];
-      if (x !== ".") out.staged.push({ path: filePath, change: x });
-      if (y !== ".") out.unstaged.push({ path: filePath, change: y });
+      const origin = isRename ? (line.split("\t")[1] ?? "") : null;
+      const rawPaths = origin === null ? [destination] : [destination, origin];
+      const filePath = origin === null ? destination : `${destination} -> ${origin}`;
+      if (withheld(rawPaths)) {
+        out.hidden.changes += (xy[0] !== "." ? 1 : 0) + (xy[1] !== "." ? 1 : 0);
+        continue;
+      }
+      if (xy[0] !== ".") out.staged.push({ path: filePath, change: xy[0] });
+      if (xy[1] !== ".") out.unstaged.push({ path: filePath, change: xy[1] });
     } else if (line.startsWith("? ")) {
-      out.untracked.push(line.slice(2));
+      const filePath = line.slice(2);
+      if (withheld([filePath])) out.hidden.changes += 1;
+      else out.untracked.push(filePath);
     } else if (line.startsWith("u ")) {
-      const parts = line.split(" ");
-      out.conflicted.push(parts.slice(10).join(" "));
+      const filePath = line.split(" ").slice(10).join(" ");
+      if (withheld([filePath])) out.hidden.conflicts += 1;
+      else out.conflicted.push(filePath);
     }
   }
   return out;
@@ -126,13 +151,6 @@ export interface GitDiffResult {
   diff: string;
 }
 
-export interface WorkspaceLike {
-  root: string;
-  ignoreRules?: IgnoreRules;
-}
-
-export type GitTarget = string | WorkspaceLike;
-
 function getDiffModeArgs(mode: DiffMode): string[] {
   if (mode === "staged") return ["--cached"];
   if (mode === "head") return ["HEAD"];
@@ -144,22 +162,20 @@ function chunkSafePaths(paths: string[], maxCount = 50, maxBytes = 32 * 1024): s
   let currentBatch: string[] = [];
   let currentBytes = 0;
 
-  for (const p of paths) {
-    const pBytes = Buffer.byteLength(p, "utf8") + 12; // overhead for ":(literal)"
+  for (const filePath of paths) {
+    const pathBytes = Buffer.byteLength(filePath, "utf8") + 12;
     if (
       currentBatch.length > 0 &&
-      (currentBatch.length >= maxCount || currentBytes + pBytes > maxBytes)
+      (currentBatch.length >= maxCount || currentBytes + pathBytes > maxBytes)
     ) {
       batches.push(currentBatch);
       currentBatch = [];
       currentBytes = 0;
     }
-    currentBatch.push(p);
-    currentBytes += pBytes;
+    currentBatch.push(filePath);
+    currentBytes += pathBytes;
   }
-  if (currentBatch.length > 0) {
-    batches.push(currentBatch);
-  }
+  if (currentBatch.length > 0) batches.push(currentBatch);
   return batches;
 }
 
@@ -184,7 +200,6 @@ export function gitDiff(
   const maxBytes = Math.min(256 * 1024, Math.max(1024, Math.floor(opts.maxBytes ?? 64 * 1024)));
   const modeArgs = getDiffModeArgs(mode);
 
-  // 1. Full-workspace inventory using NUL separation and global rename detection
   const listArgs = [
     "diff",
     "--name-status",
@@ -210,29 +225,23 @@ export function gitDiff(
 
   const tokens = listResult.stdout.split("\0");
   const safePaths: string[] = [];
-  for (let i = 0; i < tokens.length; ) {
-    const status = tokens[i++];
+  for (let index = 0; index < tokens.length; ) {
+    const status = tokens[index++];
     if (!status) break;
     if (status.startsWith("R") || status.startsWith("C")) {
-      const oldPath = tokens[i++];
-      const newPath = tokens[i++];
+      const oldPath = tokens[index++];
+      const newPath = tokens[index++];
       if (oldPath && newPath) {
-        // Layer 1: Security - EITHER side sensitive -> completely unsafe
         const isSafe = !ignoreRules.isSensitive(oldPath) && !ignoreRules.isSensitive(newPath);
-        // Layer 2: Scope - EITHER side in scope -> relevant
         const isRelevant = isPathInScope(oldPath, relPath) || isPathInScope(newPath, relPath);
-        if (isSafe && isRelevant) {
-          safePaths.push(oldPath, newPath);
-        }
+        if (isSafe && isRelevant) safePaths.push(oldPath, newPath);
       }
     } else {
-      const filePath = tokens[i++];
+      const filePath = tokens[index++];
       if (filePath) {
         const isSafe = !ignoreRules.isSensitive(filePath);
         const isRelevant = isPathInScope(filePath, relPath);
-        if (isSafe && isRelevant) {
-          safePaths.push(filePath);
-        }
+        if (isSafe && isRelevant) safePaths.push(filePath);
       }
     }
   }
@@ -250,14 +259,13 @@ export function gitDiff(
     };
   }
 
-  // 2. Fetch diffs for safe paths in bounded batches (path count + argv bytes)
   const batches = chunkSafePaths(safePaths);
   let combinedDiff = "";
   let totalAggregateBytes = 0;
   const MAX_AGGREGATE_DIFF_BYTES = 64 * 1024 * 1024;
 
   for (const batch of batches) {
-    const pathspecs = batch.map((p) => `:(literal)${p}`);
+    const pathspecs = batch.map((filePath) => `:(literal)${filePath}`);
     const diffArgs = [
       "diff",
       "--no-color",
@@ -268,7 +276,6 @@ export function gitDiff(
     ];
     const diffResult = runGit(root, diffArgs);
     if (!diffResult.ok) {
-      // Fail closed on any batch error: never return partial silent success
       return {
         isRepo: false,
         mode,
@@ -283,7 +290,6 @@ export function gitDiff(
     if (diffResult.stdout) {
       const chunkBytes = Buffer.byteLength(diffResult.stdout, "utf8");
       if (totalAggregateBytes + chunkBytes > MAX_AGGREGATE_DIFF_BYTES) {
-        // Fail closed on aggregate cap: do not fake a partial successful diff
         return {
           isRepo: false,
           mode,
@@ -304,7 +310,6 @@ export function gitDiff(
   const slice = full.subarray(offset, offset + maxBytes);
   let text = slice.toString("utf8");
   let sliceLen = slice.length;
-  // Avoid cutting mid-line when more content follows.
   if (offset + sliceLen < full.length) {
     const lastNewline = text.lastIndexOf("\n");
     if (lastNewline > 0) {
