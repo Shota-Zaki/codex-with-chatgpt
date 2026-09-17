@@ -4,14 +4,16 @@
 {
   "schema_version": 1,
   "branch": "work",
-  "base_commit": "a082ffbd4040ba751091371c1b6140e53f7d330c",
-  "checkpoint_id": "codex-with-chatgpt-baseline-ready-2026-09-17",
-  "pending_changes": [],
+  "base_commit": "423b0398730a55702d2314115b3b77e83c4f6323",
+  "checkpoint_id": "c2c-approved-roots-in-progress-2026-09-17",
+  "pending_changes": [
+    "C2C-006のfull package verificationとproject-state/diff gateが未実施"
+  ],
   "resume_notes": [
-    "Repository内Required作業は完了。mainへの公開は未実施で、明示依頼が必要な別作業。",
-    "実機・実Cloudflare・実ChatGPT connector/Project recoveryはユーザー指示によりnot-requiredであり、passとして扱っていない。",
-    "upstream mainは最終監査時点で9663b88753e35c76796c5bce000293e0bd22cd9e。",
-    "次の開発対象はCodeX-Chat-Develop側の統合Baselineとして本work branchを利用できる。"
+    "端末共通Approved Root実装とFocused verificationは完了している。",
+    "明示--workspaceを最優先し、Approved Root未設定時は従来のcurrent directory挙動を維持する。",
+    "ChatGPT C2C MCPのread-only境界、Secret保護、Repository confinementは変更していない。",
+    "npm registryへ到達できるRepository checkout環境でNEXT_WORKのWU-C2C-006-VERIFYを実行する。"
   ]
 }
 ```

@@ -1,5 +1,20 @@
 # Detailed Design
 
+## Machine-wide Approved Root registry
+
+`bin/workspace-roots.js` が端末共通のApproved Root registryを担当し、OSごとのC2C state directory配下 `workspace-roots.json` に保存する。`C2C_STATE_DIR` が指定される場合は既存のstate override規約に従う。
+
+- `c2c roots add <path>`: canonical realpathを重複排除して追加し、Default Rootへ設定する。
+- `c2c roots list`: Approved Root一覧とDefault Rootを表示する。
+- `c2c roots remove <path>`: Rootを削除し、Default削除時は残存RootをDefaultへ選び直す。
+- `c2c roots default <path>`: 既にApprovedなRootだけをDefaultへ変更する。
+- `c2c roots resolve`: current directoryに適用されるRootを確認する。
+- 通常command: 明示 `--workspace` > current directoryを含む最深Approved Root > Default Root > current directory の優先順。
+- machine-wide command (`prefs`, `sandbox-allow`, `update-check`, `tunnel login`, `roots`) にはWorkspaceを注入しない。
+- registryはowner-onlyを意図したmodeでatomic writeし、Windows等chmod semanticsがない環境ではbest effortとする。
+
+引数正規化は既存の`bin/c2c.js` executable boundaryで実施する。`record`より先にWorkspace既定値を注入するため、親Approved Root配下のRepository cwdから実行した既存record自動タグ付けも維持する。
+
 ## Repository registry
 
 `src/workspace/repositories.ts` がRepository Contextの検出・選択・containmentを担当する。

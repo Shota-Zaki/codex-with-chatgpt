@@ -3,6 +3,9 @@
 ## Functional
 
 - ChatGPT C2C MCPはread-onlyを維持し、Software Engineering実行はCodexへ限定する。
+- 端末共通のApproved Rootを1回登録でき、以後はRepositoryごとのWorkspace指定を要求しない。
+- 複数Approved Rootがある場合、現在Directoryを含む最も深いRootを優先し、該当しない場合はDefault Rootを使用する。
+- 明示 `--workspace` は端末共通設定より優先し、既存の単一Workspace運用を維持する。
 - 1 Workspaceで1個以上のRepository Contextを扱える。
 - Multi-Repository WorkspaceではRepositoryごとのGit state / Branch / Diff / Test・Build結果 / Execution Record / Task・Evidence参照 / Repository identityを識別できる。
 - Repository固有Git・Execution操作は複数Repository存在時にselectorを必須とし、暗黙集約しない。
@@ -13,7 +16,8 @@
 
 ## Security
 
-- Workspace authorization boundary、canonical realpath confinement、symlink escape防止を維持する。
+- Approved Root登録はローカルCLIからの明示操作とし、canonical realpathを保存する。
+- 端末共通Root選択後もWorkspace authorization boundary、canonical realpath confinement、symlink escape防止を維持する。
 - Repository selectorはWorkspace外を認可しない。Repository-confined pathはRepository境界を再検証する。
 - Secret/Credential/Token/OAuth保護、Credential masking、outbound sanitizer、`.c2cignore`を維持する。
 - `git_status`は機密path名を返さず件数のみ返す。

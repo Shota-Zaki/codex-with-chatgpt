@@ -299,6 +299,78 @@
         "docs/evidence/C2C-005/2026-09-17-baseline-no-device-completion.md"
       ],
       "reason": "Repository内Baseline確定作業を完了し、公開(main反映)は明示依頼が必要な別作業として実施していない"
+    },
+    {
+      "id": "C2C-006",
+      "purpose": "RepositoryごとのWorkspace指定を不要にする端末共通Approved Root設定を導入する",
+      "status": "In Progress",
+      "priority": "P0",
+      "scope": [
+        "bin/**",
+        "tests/workspace-roots.test.ts",
+        "docs/design/**",
+        "docs/evidence/**",
+        "docs/project/**"
+      ],
+      "dependencies": [
+        "C2C-005"
+      ],
+      "references": [
+        "docs/design/REQUIREMENTS.md",
+        "docs/design/BASIC_DESIGN.md",
+        "docs/design/DETAILED_DESIGN.md"
+      ],
+      "acceptance": [
+        {
+          "id": "C2C-006-A1",
+          "condition": "端末共通Approved Rootを登録し、配下RepositoryからWorkspace指定なしで同一親Workspaceを自動選択できる"
+        },
+        {
+          "id": "C2C-006-A2",
+          "condition": "複数Rootでは最深一致、Root外ではDefault、明示--workspaceでは明示値を優先し、Repository confinementとrecord identityを維持する"
+        },
+        {
+          "id": "C2C-006-A3",
+          "condition": "Approved Root未設定時の既存挙動とmachine-wide commandのWorkspace非依存を維持する"
+        }
+      ],
+      "verification": [
+        {
+          "id": "V-C2C-006-FOCUSED",
+          "required": true,
+          "method": "node --check + isolated roots add/list/resolve/remove + fake dist argv injection + record repository tagging",
+          "acceptance": [
+            "C2C-006-A1",
+            "C2C-006-A2",
+            "C2C-006-A3"
+          ],
+          "targets": [
+            "bin/c2c.js",
+            "bin/workspace-roots.js",
+            "tests/workspace-roots.test.ts"
+          ]
+        },
+        {
+          "id": "V-C2C-006-PACKAGE",
+          "required": true,
+          "method": "corepack pnpm install --frozen-lockfile + pnpm test + pnpm typecheck + pnpm build + project-state/diff gate",
+          "acceptance": [
+            "C2C-006-A1",
+            "C2C-006-A2",
+            "C2C-006-A3"
+          ],
+          "targets": [
+            "bin/c2c.js",
+            "bin/workspace-roots.js",
+            "tests/workspace-roots.test.ts",
+            "docs/design/REQUIREMENTS.md"
+          ]
+        }
+      ],
+      "evidence": [
+        "docs/evidence/C2C-006/2026-09-17-global-approved-roots.md"
+      ],
+      "reason": "Focused verificationはpass。実行環境からnpm registryへ到達できずfull package suiteとproject-state/diff gateが未実施のため継続中。"
     }
   ]
 }
