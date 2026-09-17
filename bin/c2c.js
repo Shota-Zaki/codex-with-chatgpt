@@ -84,11 +84,21 @@ function prepareRecordRepository(args) {
   const selector = optionValue(args, ["--repository", "--repo"]);
 
   if (selector) {
-    if (/^[a-f0-9]{12}$/i.test(selector.trim())) {
-      process.env.C2C_RECORD_REPOSITORY_ID = selector.trim().toLowerCase();
-      delete process.env.C2C_RECORD_REPOSITORY_ROOT;
+    const normalizedSelector = selector.trim();
+    if (/^[a-f0-9]{12}$/i.test(normalizedSelector)) {
+      const cwdRepository = repositoryRootFromGit(process.cwd());
+      if (!cwdRepository || !isInside(workspaceRoot, cwdRepository)) {
+        throw new Error(
+          "record repository id requires the command to run inside that Git repository; use a Workspace-relative repository root from the parent Workspace"
+        );
+      }
+      const actualId = repositoryIdFromPath(cwdRepository);
+      if (actualId !== normalizedSelector.toLowerCase()) {
+        throw new Error("record repository id does not match the current Git repository");
+      }
+      setRepositoryEnvironment(workspaceRoot, cwdRepository);
     } else {
-      const candidate = realpathSync(path.resolve(workspaceRoot, selector));
+      const candidate = realpathSync(path.resolve(workspaceRoot, normalizedSelector));
       const gitRoot = repositoryRootFromGit(candidate);
       if (!gitRoot || normCase(gitRoot) !== normCase(candidate)) {
         throw new Error("record --repository must point to a Git repository root");
