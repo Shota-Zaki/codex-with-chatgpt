@@ -18,8 +18,8 @@
     },
     {
       "id": "C2C-003",
-      "purpose": "upstream再接続改善を日本語SkillとHardened CLIへ退行なしでAdaptする",
-      "status": "Backlog"
+      "purpose": "upstream再接続改善を日本語SkillとHardened運用へ退行なしでAdaptし実受入する",
+      "status": "In Progress"
     },
     {
       "id": "C2C-004",
