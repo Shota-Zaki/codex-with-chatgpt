@@ -52,12 +52,12 @@ describe("machine-wide Approved Roots", () => {
     expect(resolveApprovedWorkspaceRoot(outside)).toBe(config.defaultRoot);
   });
 
-  it("zero-config bootstraps the conventional root when running inside it", () => {
+  it("zero-config bootstraps the conventional root from any working directory", () => {
     process.env.C2C_DEFAULT_WORKSPACE_ROOT = root;
     expect(readWorkspaceRoots().approvedRoots).toEqual([]);
     expect(implicitWorkspaceRoot()).toBe(fs.realpathSync.native(root));
 
-    const resolved = resolveApprovedWorkspaceRoot(path.join(root, "team", "repo"));
+    const resolved = resolveApprovedWorkspaceRoot(outside);
     expect(resolved).toBe(fs.realpathSync.native(root));
     expect(readWorkspaceRoots()).toEqual({
       schemaVersion: 1,
@@ -66,8 +66,9 @@ describe("machine-wide Approved Roots", () => {
     });
   });
 
-  it("does not auto-approve the conventional root when running outside it", () => {
-    process.env.C2C_DEFAULT_WORKSPACE_ROOT = root;
+  it("keeps current-directory fallback when the conventional root does not exist", () => {
+    process.env.C2C_DEFAULT_WORKSPACE_ROOT = path.join(outside, "missing");
+    expect(implicitWorkspaceRoot()).toBeNull();
     expect(resolveApprovedWorkspaceRoot(outside)).toBeNull();
     expect(readWorkspaceRoots().approvedRoots).toEqual([]);
   });

@@ -4,7 +4,7 @@
 
 `bin/workspace-roots.js` が端末共通のApproved Root registryを担当し、OSごとのC2C state directory配下 `workspace-roots.json` に保存する。`C2C_STATE_DIR` が指定される場合は既存のstate override規約に従う。
 
-- Windows zero-config root: `C:\project`。registryが空、Rootが実在、current directoryがその配下という3条件を満たした最初のWorkspace解決時にcanonical Rootを自動登録しDefault化する。
+- Windows zero-config root: `C:\project`。registryが空でRootが実在する場合、current directoryに関係なく最初のWorkspace解決時にcanonical Rootを自動登録しDefault化する。
 - `C2C_DEFAULT_WORKSPACE_ROOT`: test/portable environment向けにzero-config候補を上書きできる。通常Windows利用では設定不要。
 - `c2c roots add <path>`: canonical realpathを重複排除して追加し、Default Rootへ設定する。
 - `c2c roots list`: Approved Root一覧とDefault Rootを表示する。
@@ -12,11 +12,17 @@
 - `c2c roots default <path>`: 既にApprovedなRootだけをDefaultへ変更する。
 - `c2c roots resolve`: current directoryに適用されるRootを確認する。
 - 通常command: 明示 `--workspace` > current directoryを含む最深Approved Root > Default Root > zero-config bootstrap > current directory の優先順。
-- zero-config bootstrapはcurrent directoryが候補Root配下の場合だけ実行し、候補Root外から暗黙に認可境界を拡張しない。
+- zero-config bootstrapは固定候補Rootだけを認可対象とし、候補Root以外のDirectoryを暗黙登録しない。
 - machine-wide command (`prefs`, `sandbox-allow`, `update-check`, `tunnel login`, `roots`) にはWorkspaceを注入しない。
 - registryはowner-onlyを意図したmodeでatomic writeし、Windows等chmod semanticsがない環境ではbest effortとする。
 
 引数正規化は既存の`bin/c2c.js` executable boundaryで実施する。`record`より先にWorkspace既定値を注入するため、親Approved Root配下のRepository cwdから実行した既存record自動タグ付けも維持する。
+
+## Single Workspace lifecycle
+
+Windows標準構成では `C:\project` のWorkspace IDに対してBridge daemon、OAuth/token store、Tunnel state、Connector endpointを1組だけ持つ。`c2c setup` / `start` / `status` / `doctor` を別Directoryから実行しても同じWorkspaceへ解決されるため、RepositoryごとのBridge/Tunnel/Connectorは作成しない。
+
+Repository選択はMCP data plane内部で行う。`workspace_info` がRepository一覧を返し、repository-specific toolはid / name / Workspace-relative rootをselectorとして使用する。これにより接続単位は1つでも、Git/Execution/Task・Evidenceの識別境界はRepository単位で維持する。
 
 ## Repository registry
 

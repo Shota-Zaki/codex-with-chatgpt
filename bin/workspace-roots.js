@@ -181,7 +181,7 @@ export function resolveApprovedWorkspaceRoot(cwd = process.cwd()) {
 
   if (current.approvedRoots.length === 0) {
     const implicit = implicitWorkspaceRoot();
-    if (implicit && isInside(implicit, canonicalCwd)) {
+    if (implicit) {
       approveWorkspaceRoot(implicit, { makeDefault: true });
       return implicit;
     }

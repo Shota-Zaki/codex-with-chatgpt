@@ -302,7 +302,7 @@
     },
     {
       "id": "C2C-006",
-      "purpose": "RepositoryごとのWorkspace指定を不要にする端末共通Approved Root設定とWindows zero-config Rootを導入する",
+      "purpose": "RepositoryごとのC2C設定・接続作成を不要にする端末共通Approved RootとWindows単一Workspace運用を導入する",
       "status": "In Progress",
       "priority": "P0",
       "scope": [
@@ -323,7 +323,7 @@
       "acceptance": [
         {
           "id": "C2C-006-A1",
-          "condition": "WindowsではC:\\project配下からの初回利用で同Rootを自動Approved/Default化し、手動設定なしで親Workspaceを選択できる。その他のRootも1回の明示登録で以後再設定不要とする"
+          "condition": "WindowsではC:\\projectが存在すれば現在Directoryに関係なく初回Workspace利用で同Rootを自動Approved/Default化し、C:\\projectに対するBridge/Tunnel/ChatGPT Connectorを1組だけ使用できる"
         },
         {
           "id": "C2C-006-A2",
@@ -331,14 +331,14 @@
         },
         {
           "id": "C2C-006-A3",
-          "condition": "C:\\projectが存在しない、または現在Directoryがその配下でない状態でApproved Root未設定なら既存current-directory挙動を維持し、machine-wide commandもWorkspace非依存を維持する"
+          "condition": "C:\\projectが存在しない状態でApproved Root未設定なら既存current-directory挙動を維持し、machine-wide commandもWorkspace非依存を維持する"
         }
       ],
       "verification": [
         {
           "id": "V-C2C-006-FOCUSED",
           "required": true,
-          "method": "node --check + isolated roots add/list/resolve/remove + zero-config bootstrap/non-bootstrap + fake dist argv injection + record repository tagging",
+          "method": "node --check + isolated roots add/list/resolve/remove + zero-config any-cwd bootstrap/missing-root fallback + fake dist argv injection + record repository tagging",
           "acceptance": [
             "C2C-006-A1",
             "C2C-006-A2",
@@ -370,7 +370,7 @@
       "evidence": [
         "docs/evidence/C2C-006/2026-09-17-global-approved-roots.md"
       ],
-      "reason": "Approved RootとWindows C:\\project zero-configのFocused verificationはpass。実行環境からnpm registryへ到達できずfull package suiteとproject-state/diff gateが未実施のため継続中。"
+      "reason": "Approved RootとWindows C:\\project single-workspaceのFocused verificationはpass。実行環境からnpm registryへ到達できずfull package suiteとproject-state/diff gateが未実施のため継続中。"
     }
   ]
 }

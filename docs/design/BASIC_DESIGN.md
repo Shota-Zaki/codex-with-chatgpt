@@ -10,11 +10,17 @@
 
 ## Approved Root resolution
 
-Windowsでは `C:\project` をzero-configの標準Rootとする。Approved Root registryが空で、`C:\project` が実在し、現在Directoryがその配下にある場合は、初回のWorkspace利用commandでcanonical `C:\project` をApproved Rootへ自動登録してDefault Rootにする。これにより通常利用では `roots add` を要求しない。
+Windowsでは `C:\project` をzero-configの標準Rootとする。Approved Root registryが空で `C:\project` が実在する場合、最初のWorkspace利用commandがどのDirectoryから実行されてもcanonical `C:\project` をApproved Rootへ自動登録してDefault Rootにする。通常利用では `roots add` やRepositoryへの `cd` を要求しない。
 
-標準Rootを使わない場合は `c2c roots add <path>` でcanonical directoryを端末共通registryへ追加し、そのRootをDefault Rootにする。通常の`c2c`実行で`--workspace`が省略された場合は、現在Directoryを含むApproved Rootのうち最も深いRootを使用する。該当RootがなければDefault Rootを使用し、registryが空かつzero-config Rootが適用されない場合は従来どおりcurrent directoryを使用する。
+標準Rootを使わない場合は `c2c roots add <path>` でcanonical directoryを端末共通registryへ追加し、そのRootをDefault Rootにする。通常の`c2c`実行で`--workspace`が省略された場合は、現在Directoryを含むApproved Rootのうち最も深いRootを使用する。該当RootがなければDefault Rootを使用し、registryが空かつzero-config Rootが存在しない場合は従来どおりcurrent directoryを使用する。
 
 明示 `--workspace` は常に優先する。Approved RootはRepository Contextを統合しないため、Git/Execution identityとRepository confinementは既存どおりRepository単位で維持する。
+
+## Single C2C Workspace
+
+常用Windows構成では `C:\project` に対してBridge / Tunnel / ChatGPT Connectorを1組だけ作成し、配下Repositoryは同じ接続を共有する。ユーザーはRepositoryごとのC2C setup/start/connector作成を行わない。
+
+ChatGPTは `workspace_info` でRepository一覧を取得し、ユーザーが指定したRepository名に対応するRepository Contextを選択してGit/Execution/read操作を行う。接続は共有するがRepository confinementとExecution identityは分離する。
 
 ## Multi-Repository
 
@@ -24,7 +30,7 @@ Windowsでは `C:\project` をzero-configの標準Rootとする。Approved Root 
 
 ## Compatibility
 
-`C:\project` が存在しない、または現在Directoryがその配下でない状態でApproved Root未設定なら従来挙動を維持する。単一Repository時は既存呼び出しのselector省略を許可する。Repository IDはstandalone Workspace IDと同じ算出方式とし、既存execution historyを引き継ぐ。
+`C:\project` が存在しない状態でApproved Root未設定なら従来挙動を維持する。単一Repository時は既存呼び出しのselector省略を許可する。Repository IDはstandalone Workspace IDと同じ算出方式とし、既存execution historyを引き継ぐ。
 
 ## References
 
