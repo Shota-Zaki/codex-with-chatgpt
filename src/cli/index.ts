@@ -517,8 +517,6 @@ program
       userMessage?: string;
       mcpUrl: string | null;
       previousMcpUrl: string | null;
-      pairingCode?: string;
-      pairingExpiresAt?: number;
       pages: {
         developerMode: string;
         plugins: string;
@@ -608,16 +606,6 @@ program
           mcpUrl: nextMcp,
           previousMcpUrl: lastEndpoint?.mcpUrl ?? null,
         };
-        if (action === "update") {
-          try {
-            const pairing = await adminFetch<PairingResponse>(runtime, "POST", "/admin/pairing");
-            chatgptRepair.pairingCode = pairing.code;
-            chatgptRepair.pairingExpiresAt = pairing.expiresAt;
-            results.push(`新しいペアリングコードを生成しました。「${boundName}」の更新が必要です`);
-          } catch (error) {
-            report.oauth = { ok: false, detail: (error as Error).message };
-          }
-        }
       } else if (namedReady) {
         report.tunnel = report.tunnel ?? { ok: false, detail: "NAMED_TUNNEL_DOWN" };
         namedRepair = { needed: true, userMessage: NAMED_REPAIR_MESSAGE };
@@ -687,7 +675,6 @@ program
     if (chatgptRepair.needed && chatgptRepair.userMessage) {
       say(chatgptRepair.userMessage);
       if (chatgptRepair.mcpUrl) say(`新しい接続先：${chatgptRepair.mcpUrl}`);
-      if (chatgptRepair.pairingCode) say(`ペアリングコード：${chatgptRepair.pairingCode}`);
       say("");
     }
     say(

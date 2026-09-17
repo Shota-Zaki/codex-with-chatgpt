@@ -399,8 +399,8 @@ When a temporary public address changed, `chatgptRepair.connectorAction=update`
 means Delete + recreate, never Reconnect.
 
 1. Run `c2c doctor -w <ws> --json`. Tell the user exactly
-   `chatgptRepair.userMessage`. Ignore any pairing code that doctor happened to
-   mint; it may expire before the browser reaches authorization.
+   `chatgptRepair.userMessage`. Doctor does not mint pairing codes; pairing is
+   intentionally deferred until the browser authorization form is visible.
 2. Using the same IAB tab, delete only `chatgptRepair.connectorName`, then create
    that **same** name at the add-connector URL with `chatgptRepair.mcpUrl` and
    OAuth.
