@@ -1,0 +1,31 @@
+name: Temporary baseline verification
+
+on:
+  push:
+    branches:
+      - work
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Frozen install
+        run: corepack pnpm install --frozen-lockfile
+      - name: Test
+        run: corepack pnpm test
+      - name: Typecheck
+        run: corepack pnpm typecheck
+      - name: Build
+        run: corepack pnpm build
