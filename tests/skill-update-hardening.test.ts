@@ -14,8 +14,10 @@ describe("Skill update hardening", () => {
     expect(skill).toContain("Never update automatically");
     expect(skill).toContain("Never stash, reset, discard, or overwrite local changes");
     expect(skill).toContain("corepack pnpm install --frozen-lockfile");
-    expect(skill).toContain("one shared hardened checkout");
-    expect(skill).toContain("one repository per workspace boundary");
+    expect(skill).toContain("one shared hardened C2C checkout per machine");
+    expect(skill).toContain("Workspace is the authorization boundary");
+    expect(skill).toContain("Multi-repository Workspaces are allowed");
+    expect(skill).not.toContain("one repository per workspace boundary");
 
     expect(skill).not.toContain("~/.codex/skills/codex-with-chatgpt/SKILL.md");
     expect(skill).not.toContain("git stash && git pull --ff-only");

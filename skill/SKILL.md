@@ -150,8 +150,8 @@ Do not pull/install/build/restart from the normal update check.
 
 Only when the user explicitly asks to update C2C:
 
-1. In the shared hardened checkout, `git status --porcelain`. If dirty, stop;
-   never stash/reset/discard automatically.
+1. In the shared hardened checkout, `git status --porcelain`. If dirty, stop.
+   Never stash, reset, discard, or overwrite local changes.
 2. `git fetch --all --prune`. Candidate must be the configured Hardened Fork
    branch, never the original upstream directly.
 3. Inspect `git log --oneline HEAD..<candidate>`, `git diff --stat`, and the

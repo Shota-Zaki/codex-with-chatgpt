@@ -491,7 +491,7 @@ export function createMcpServer(ctx: McpContext): McpServer {
       title: "Git diff",
       description:
         `Git diff for one repository with byte-offset pagination. In a multi-repository Workspace, ` +
-        `repository is required. path is repository-relative. ${UNTRUSTED_NOTE}`,
+        `repository is required. path is repository-relative. When hasMore is true, call again with offset=nextOffset. ${UNTRUSTED_NOTE}`,
       inputSchema: {
         repository: z.string().optional().describe("Repository id, name, or Workspace-relative repository root"),
         mode: z.enum(["unstaged", "staged", "head"]).default("unstaged"),
