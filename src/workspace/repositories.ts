@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { Workspace } from "./manager.js";
 import { gitInfo, runGit, type GitInfo } from "./git.js";
-import { readJsonIfExists } from "../config/paths.js";
 
 export type RepositorySelectionErrorCode =
   | "NO_REPOSITORY"
@@ -40,6 +39,7 @@ interface WorkspaceRepositoryConfig {
 }
 
 const MAX_REPOSITORIES = 64;
+const MAX_DISCOVERY_CANDIDATES = 128;
 const CASE_INSENSITIVE = process.platform === "win32" || process.platform === "darwin";
 const normCase = (value: string): string => (CASE_INSENSITIVE ? value.toLowerCase() : value);
 
@@ -48,29 +48,45 @@ function slash(value: string): string {
 }
 
 function normalizeSelectorPath(value: string): string {
-  const normalized = value.trim().replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
+  const normalized = value.trim().replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/, "");
   return normalized === "" ? "." : normalized;
 }
 
+function invalidRepositoryConfig(message: string): never {
+  throw new RepositorySelectionError("INVALID_REPOSITORY_CONFIG", message);
+}
+
 function configuredRepositoryRoots(workspace: Workspace): string[] | null {
-  const raw = readJsonIfExists<WorkspaceRepositoryConfig>(path.join(workspace.root, ".c2c.json"));
-  if (!raw || raw.repositories === undefined) return null;
-  if (!Array.isArray(raw.repositories)) {
-    throw new RepositorySelectionError(
-      "INVALID_REPOSITORY_CONFIG",
+  const configFile = path.join(workspace.root, ".c2c.json");
+  if (!fs.existsSync(configFile)) return null;
+
+  let parsed: WorkspaceRepositoryConfig;
+  try {
+    const value = JSON.parse(fs.readFileSync(configFile, "utf8")) as unknown;
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return invalidRepositoryConfig(".c2c.json must contain a JSON object.");
+    }
+    parsed = value as WorkspaceRepositoryConfig;
+  } catch (error) {
+    if (error instanceof RepositorySelectionError) throw error;
+    return invalidRepositoryConfig(".c2c.json is invalid JSON; repository discovery was stopped.");
+  }
+
+  if (parsed.repositories === undefined) return null;
+  if (!Array.isArray(parsed.repositories)) {
+    return invalidRepositoryConfig(
       ".c2c.json repositories must be an array of workspace-relative repository roots."
     );
   }
-  if (raw.repositories.length > MAX_REPOSITORIES) {
-    throw new RepositorySelectionError(
-      "INVALID_REPOSITORY_CONFIG",
+  if (parsed.repositories.length > MAX_REPOSITORIES) {
+    return invalidRepositoryConfig(
       `.c2c.json repositories exceeds the maximum of ${MAX_REPOSITORIES}.`
     );
   }
-  const values = raw.repositories.map((entry) => {
+
+  const values = parsed.repositories.map((entry) => {
     if (typeof entry !== "string" || entry.trim() === "") {
-      throw new RepositorySelectionError(
-        "INVALID_REPOSITORY_CONFIG",
+      return invalidRepositoryConfig(
         ".c2c.json repositories entries must be non-empty strings."
       );
     }
@@ -132,10 +148,13 @@ function autoDiscoverRepositoryRoots(workspace: Workspace): string[] {
     return candidates;
   }
 
-  for (const entry of entries) {
+  let scanned = 0;
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     if (!entry.isDirectory()) continue;
     const rel = entry.name;
     if (workspace.ignoreRules.isHidden(rel) || workspace.ignoreRules.isHidden(`${rel}/`)) continue;
+    scanned += 1;
+    if (scanned > MAX_DISCOVERY_CANDIDATES) break;
     const candidate = path.join(workspace.root, entry.name);
     if (isRepositoryRoot(candidate)) candidates.push(rel);
     if (candidates.length >= MAX_REPOSITORIES) break;
@@ -191,6 +210,12 @@ export function selectRepository(
       normalizeSelectorPath(repository.relativeRoot).toLowerCase() === normalized.toLowerCase()
   );
   if (exact.length === 1) return exact[0];
+  if (exact.length > 1) {
+    throw new RepositorySelectionError(
+      "AMBIGUOUS_REPOSITORY",
+      `Repository selector '${raw}' is ambiguous. Use repository id. Available: ${describeRepositories(exact)}`
+    );
+  }
 
   const byName = repositories.filter((repository) => repository.name.toLowerCase() === raw.toLowerCase());
   if (byName.length === 1) return byName[0];
