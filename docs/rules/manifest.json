@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "rules_version": "3.0.0",
+  "rule_owners": {
+    "principles": "docs/rules/DEVELOPMENT_RULES.md",
+    "workflow": "docs/rules/WORKFLOW.md",
+    "documents": "docs/rules/REPOSITORY_STANDARD.md",
+    "bootstrap": "docs/rules/NEW_REPOSITORY_STANDARD.md",
+    "tasks": "docs/rules/TASK_STANDARD.md",
+    "verification": "docs/rules/VERIFICATION_STANDARD.md",
+    "ai": "docs/rules/AI_EXECUTION_STANDARD.md",
+    "handoff": "docs/rules/CONTEXT_HANDOFF_STANDARD.md",
+    "chatgpt": "docs/rules/CHATGPT_EXECUTION_STANDARD.md",
+    "codex": "docs/rules/CODEX_EXECUTION_STANDARD.md",
+    "output": "docs/rules/OUTPUT_QUALITY_STANDARD.md",
+    "versioning": "docs/rules/VERSIONING_STANDARD.md",
+    "commands": "docs/rules/CHAT_COMMAND_STANDARD.md"
+  },
+  "support_files": [
+    {
+      "source": "scripts/rules_common.py",
+      "target": "scripts/rules/rules_common.py"
+    },
+    {
+      "source": "scripts/check-project-state.py",
+      "target": "scripts/rules/check-project-state.py"
+    },
+    {
+      "source": "scripts/check-rule-package.py",
+      "target": "scripts/rules/check-rule-package.py"
+    }
+  ],
+  "templates": [
+    "templates/chatgpt/PROJECT_CUSTOM_INSTRUCTIONS.md",
+    "templates/codex/GLOBAL_AGENTS.md",
+    "templates/evidence/VERIFICATION.md",
+    "templates/evidence/WORK_UNIT.md",
+    "templates/repository/AGENTS.md",
+    "templates/repository/docs/design/BASIC_DESIGN.md",
+    "templates/repository/docs/design/DETAILED_DESIGN.md",
+    "templates/repository/docs/design/REQUIREMENTS.md",
+    "templates/repository/docs/project/AI_WORK_STATE.md",
+    "templates/repository/docs/project/NEXT_WORK.md",
+    "templates/repository/docs/project/PROJECT_BRIEF.md",
+    "templates/repository/docs/project/TASKS.md",
+    "templates/repository/docs/rules/RULES_SOURCE.md"
+  ],
+  "commands": {
+    "dev": [
+      "**"
+    ],
+    "continue": [
+      "**"
+    ],
+    "status": [],
+    "design": [
+      "docs/design/**",
+      "docs/project/**",
+      "docs/evidence/**"
+    ],
+    "audit": [
+      "docs/quality/**",
+      "docs/project/**",
+      "docs/evidence/**"
+    ],
+    "sync-rules": [
+      "docs/rules/**",
+      "scripts/rules/**",
+      "AGENTS.md"
+    ],
+    "rules": [],
+    "maintenance": [
+      "**"
+    ],
+    "release": [
+      "**"
+    ]
+  },
+  "publication": [
+    "README.md",
+    "AGENTS.md",
+    "docs/rules/**",
+    "templates/**",
+    "scripts/rules_common.py",
+    "scripts/check-rule-package.py",
+    "scripts/check-project-state.py",
+    "scripts/install-codex-global.py",
+    "scripts/install-codex-global.ps1",
+    "scripts/install-codex-global.sh",
+    "tests/test_rules.py",
+    ".gitignore",
+    ".gitattributes"
+  ]
+}
