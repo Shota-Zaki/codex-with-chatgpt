@@ -39,7 +39,9 @@ jobs:
         run: corepack pnpm build
 
       - name: Finalize canonical state
-        run: python scripts/finalize-baseline.py
+        run: |
+          python scripts/pre-finalize.py
+          python scripts/finalize-baseline.py
 
       - name: Commit verified baseline
         shell: bash
