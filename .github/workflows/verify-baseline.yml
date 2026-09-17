@@ -40,7 +40,20 @@ jobs:
           old = "1. In the shared hardened checkout, `git status --porcelain`. If dirty, stop;\n   never stash/reset/discard automatically."
           new = "1. In the shared hardened checkout, `git status --porcelain`. If dirty, stop.\n   Never stash, reset, discard, or overwrite local changes."
           if old in text:
-              skill.write_text(text.replace(old, new, 1), encoding="utf-8")
+              text = text.replace(old, new, 1)
+          old = (
+              "1. Run `c2c doctor -w <ws> --json`. Tell the user exactly\n"
+              "   `chatgptRepair.userMessage`. Ignore any pairing code that doctor happened to\n"
+              "   mint; it may expire before the browser reaches authorization."
+          )
+          new = (
+              "1. Run `c2c doctor -w <ws> --json`. Tell the user exactly\n"
+              "   `chatgptRepair.userMessage`. Doctor does not mint pairing codes; pairing is\n"
+              "   intentionally deferred until the browser authorization form is visible."
+          )
+          if old in text:
+              text = text.replace(old, new, 1)
+          skill.write_text(text, encoding="utf-8")
 
           test = Path("tests/skill-update-hardening.test.ts")
           text = test.read_text(encoding="utf-8")
@@ -62,14 +75,54 @@ jobs:
           new = '    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },\n    windowsHide: true,\n  });\n  return { ok:'
           if old in tail:
               tail = tail.replace(old, new, 1)
-          cli.write_text(head + marker + tail, encoding="utf-8")
+          text = head + marker + tail
+          doctor_old = '''        if (action === "update") {
+          try {
+            const pairing = await adminFetch<PairingResponse>(runtime, "POST", "/admin/pairing");
+            chatgptRepair.pairingCode = pairing.code;
+            chatgptRepair.pairingExpiresAt = pairing.expiresAt;
+            results.push(`新しいペアリングコードを生成しました。「${boundName}」の更新が必要です`);
+          } catch (error) {
+            report.oauth = { ok: false, detail: (error as Error).message };
+          }
+        }
+'''
+          if doctor_old in text:
+              text = text.replace(doctor_old, "", 1)
+          cli.write_text(text, encoding="utf-8")
+
+          doctor_test = Path("tests/doctor-late-pairing.test.ts")
+          doctor_test.write_text('''import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+describe("Doctor late-pairing hardening", () => {
+  it("never mints a pairing code before the browser authorization form is ready", () => {
+    const cli = fs.readFileSync(path.join(repoRoot, "src", "cli", "index.ts"), "utf8");
+    const doctorStart = cli.indexOf("// ---------------------------------------------------------------- doctor");
+    const pairStart = cli.indexOf("// ---------------------------------------------------------------- pair / unpair");
+    expect(doctorStart).toBeGreaterThanOrEqual(0);
+    expect(pairStart).toBeGreaterThan(doctorStart);
+    expect(cli.slice(doctorStart, pairStart)).not.toContain('"/admin/pairing"');
+    expect(cli.slice(pairStart)).toContain('"/admin/pairing"');
+
+    const skill = fs.readFileSync(path.join(repoRoot, "skill", "SKILL.md"), "utf8");
+    expect(skill).toContain("Doctor does not mint pairing codes");
+    expect(skill).toContain("Only when the pairing form is visible run");
+    expect(skill).not.toContain("Ignore any pairing code that doctor happened to mint");
+  });
+});
+''', encoding="utf-8")
           PY
 
-          if ! git diff --quiet -- src/mcp/server.ts src/cli/index.ts skill/SKILL.md tests/skill-update-hardening.test.ts; then
+          if ! git diff --quiet -- src/mcp/server.ts src/cli/index.ts skill/SKILL.md tests/skill-update-hardening.test.ts tests/doctor-late-pairing.test.ts || [ -n "$(git ls-files --others --exclude-standard tests/doctor-late-pairing.test.ts)" ]; then
             git config user.name "Shota-Zaki"
             git config user.email "246847859+Shota-Zaki@users.noreply.github.com"
-            git add src/mcp/server.ts src/cli/index.ts skill/SKILL.md tests/skill-update-hardening.test.ts
-            git commit -m "fix: align hardened contracts with multi-repository baseline"
+            git add src/mcp/server.ts src/cli/index.ts skill/SKILL.md tests/skill-update-hardening.test.ts tests/doctor-late-pairing.test.ts
+            git commit -m "fix: defer reconnect pairing until authorization"
             git push origin HEAD:work
           fi
       - name: Enable Corepack
