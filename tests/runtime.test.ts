@@ -79,7 +79,7 @@ describe("findBridgeObservation", () => {
       expect(observation.state).toBe("unknown");
       if (observation.state === "unknown") expect(observation.reason).toBe("probe_failed");
       expect(await findLiveBridge(workspace.id)).toBeNull();
-      await expect(ensureBridge(root)).rejects.toThrow(/uncertain/);
+      await expect(ensureBridge(root)).rejects.toThrow(/状態を確認できません/);
     } finally {
       if (child.pid) {
         try {
