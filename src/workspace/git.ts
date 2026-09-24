@@ -1,6 +1,28 @@
 import { spawnSync } from "node:child_process";
 import { IgnoreRules } from "./ignore.js";
 
+const GIT_ENV_KEYS = [
+  "HOME", "USER", "LOGNAME", "PATH", "PATHEXT", "SYSTEMROOT", "SystemRoot", "WINDIR", "ComSpec",
+  "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "APPDATA", "TEMP", "TMP", "TMPDIR",
+  "LANG", "LC_ALL", "TZ",
+] as const;
+
+/** 読み取り専用Gitプロセスへshellの秘密情報やGit注入用環境変数を引き継がない。 */
+export function gitEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const safe: NodeJS.ProcessEnv = {
+    GIT_OPTIONAL_LOCKS: "0",
+    GIT_TERMINAL_PROMPT: "0",
+    GCM_INTERACTIVE: "Never",
+    GIT_PAGER: "cat",
+    PAGER: "cat",
+  };
+  for (const key of GIT_ENV_KEYS) {
+    const value = env[key];
+    if (value !== undefined) safe[key] = value;
+  }
+  return safe;
+}
+
 export interface GitCommandResult {
   ok: boolean;
   stdout: string;
@@ -9,12 +31,14 @@ export interface GitCommandResult {
 }
 
 export function runGit(root: string, args: string[]): GitCommandResult {
-  const result = spawnSync("git", args, {
+  const safeArgs = ["-c", "core.fsmonitor=false", "-c", "diff.external=", ...args];
+  const result = spawnSync("git", safeArgs, {
     cwd: root,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
     timeout: 30_000,
     windowsHide: true,
+    env: gitEnvironment(),
   });
   return {
     ok: result.status === 0,
@@ -206,6 +230,8 @@ export function gitDiff(
   const listArgs = [
     "diff",
     "--name-status",
+    "--no-ext-diff",
+    "--no-textconv",
     "-z",
     "--find-renames=1%",
     ...modeArgs,
@@ -279,6 +305,8 @@ export function gitDiff(
     const diffArgs = [
       "diff",
       "--no-color",
+      "--no-ext-diff",
+      "--no-textconv",
       "--find-renames=1%",
       ...modeArgs,
       "--",
