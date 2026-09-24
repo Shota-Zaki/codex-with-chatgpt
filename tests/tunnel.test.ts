@@ -155,7 +155,7 @@ describe("CloudflaredQuickTunnel", () => {
     const starting = tunnel.start(3333);
     announceUrl(child);
 
-    await expect(starting).rejects.toThrow(/timed out/i);
+    await expect(starting).rejects.toThrow(/タイムアウト/);
     expect(child.kill).toHaveBeenCalledWith("SIGTERM");
     expect(tunnel.status()).toMatchObject({ running: false, url: null });
   });
@@ -168,8 +168,8 @@ describe("CloudflaredQuickTunnel", () => {
 
     const concurrent = tunnel.start(3333);
     await tunnel.stop();
-    await expect(starting).rejects.toThrow(/stopped/i);
-    await expect(concurrent).rejects.toThrow(/stopped/i);
+    await expect(starting).rejects.toThrow(/停止/);
+    await expect(concurrent).rejects.toThrow(/停止/);
     expect(spawnImpl).toHaveBeenCalledTimes(1);
     expect(child.kill).toHaveBeenCalledWith("SIGTERM");
   });
@@ -186,7 +186,7 @@ describe("CloudflaredQuickTunnel", () => {
     child.exitCode = 1;
     child.emit("exit", 1, null);
     resolveFetch(healthResponse());
-    await expect(starting).rejects.toThrow(/exited/i);
+    await expect(starting).rejects.toThrow(/終了/);
     expect(tunnel.status()).toMatchObject({ running: false, url: null });
   });
 
@@ -235,7 +235,7 @@ describe("tunnel transport protocol", () => {
 
   it("rejects unknown protocols instead of silently falling back", () => {
     expect(() => resolveTunnelProtocol({ C2C_TUNNEL_PROTOCOL: "tcp" })).toThrow(
-      /C2C_TUNNEL_PROTOCOL must be one of auto, quic, http2/
+      /C2C_TUNNEL_PROTOCOLには次のいずれかを指定してください/
     );
   });
 });
@@ -246,8 +246,8 @@ describe("normalizeNamedTunnelHostname", () => {
   });
 
   it("rejects URLs and invalid hostnames", () => {
-    expect(() => normalizeNamedTunnelHostname("https://dev.getremi.xyz")).toThrow(/invalid/i);
-    expect(() => normalizeNamedTunnelHostname("localhost")).toThrow(/invalid/i);
+    expect(() => normalizeNamedTunnelHostname("https://dev.getremi.xyz")).toThrow(/無効/);
+    expect(() => normalizeNamedTunnelHostname("localhost")).toThrow(/無効/);
   });
 });
 
