@@ -799,7 +799,7 @@ acceptUnusedWorkspaceOption(
       return;
     }
     if (result.alreadyAllowed) check("サンドボックス許可設定は準備済みです");
-    else check("ローカル設定ディレクトリをCodexサンドボックスの許可設定へ追加しました（后续对话无需再提权）");
+    else check("ローカル設定ディレクトリをCodexサンドボックスの許可設定へ追加しました");
   });
 
 // ---------------------------------------------------------------- update-check（外部照会なし）
