@@ -327,11 +327,11 @@ export function createMcpServer(ctx: McpContext): McpServer {
     {
       title: "Git差分",
       description:
-        `Git差分をbyte offset方式でページングして返します。modeはunstaged（既定）、staged、head（作業ツリーとHEADの比較）を指定できます。hasMoreがtrueの場合はoffset=nextOffsetで続きが読めます。 ${UNTRUSTED_NOTE}`,
+        `Git差分をバイトオフセット方式でページングして返します。modeはunstaged（既定）、staged、head（作業ツリーとHEADの比較）を指定できます。hasMoreがtrueの場合はoffset=nextOffsetで続きが読めます。 ${UNTRUSTED_NOTE}`,
       inputSchema: {
         mode: z.enum(["unstaged", "staged", "head"]).default("unstaged"),
         path: z.string().optional().describe("差分対象を1つのWorkspace相対パスに限定します"),
-        offset: z.number().int().min(0).default(0).describe("ページング用byte offset"),
+        offset: z.number().int().min(0).default(0).describe("ページング用バイトオフセット"),
         max_bytes: z.number().int().min(1024).max(262144).default(65536),
       },
       outputSchema: gitDiffOutputSchema,
@@ -363,7 +363,7 @@ export function createMcpServer(ctx: McpContext): McpServer {
     {
       title: "テスト状態",
       description:
-        `Codex harnessが記録した直近のテスト実行状態を返します。このツール自体はテストを実行せず、最新の実行記録だけを読み取ります。 ${UNTRUSTED_NOTE}`,
+        `Codex実行基盤が記録した直近のテスト実行状態を返します。このツール自体はテストを実行せず、最新の実行記録だけを読み取ります。 ${UNTRUSTED_NOTE}`,
       inputSchema: {},
       outputSchema: testStatusOutputSchema,
       annotations: { readOnlyHint: true },
@@ -444,9 +444,9 @@ export function createMcpServer(ctx: McpContext): McpServer {
       const result = readExecutionOutput(workspace.id, args.id);
       if (!result.ok) {
         if (result.error === "OUTPUT_RESTRICTED") {
-          return fail("OUTPUT_RESTRICTED", "This output was not released for ChatGPT to read.");
+          return fail("OUTPUT_RESTRICTED", "この実行出力はChatGPTへの共有対象ではありません。");
         }
-        return fail("NOT_FOUND", `No execution output with id ${args.id}.`);
+        return fail("NOT_FOUND", `id ${args.id} の実行出力が見つかりません。`);
       }
       return okStructured({
         action: "read",
