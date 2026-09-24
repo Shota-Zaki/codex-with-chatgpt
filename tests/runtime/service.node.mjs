@@ -48,6 +48,8 @@ for (const [key, value] of [
   ['repository', '/Volumes/ZAKKO_DEV/repos-other/app'],
   ['node', '/Volumes/ZAKKO_DEV/node'],
   ['runtimeDir', '/tmp/c2c'],
+  ['stateDir', '/Volumes/ZAKKO_DEV/repos/.c2c-state'],
+  ['stateDir', '/tmp/c2c-state'],
   ['volumeUUID', ''],
   ['user', 'test;echo bad'],
 ]) {
