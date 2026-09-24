@@ -8,6 +8,24 @@ import { Workspace } from "../workspace/manager.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const DAEMON_ENV_KEYS = [
+  "HOME", "USER", "LOGNAME", "PATH", "PATHEXT", "SYSTEMROOT", "SystemRoot", "WINDIR", "ComSpec",
+  "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "APPDATA", "TEMP", "TMP", "TMPDIR",
+  "XDG_STATE_HOME", "LANG", "LC_ALL", "TZ",
+  "C2C_STATE_DIR", "C2C_LOG_LEVEL", "C2C_TUNNEL_PROTOCOL", "C2C_CLOUDFLARED_PATH",
+  "C2C_DISABLE_RG", "C2C_RG_PATH",
+] as const;
+
+/** Bridge daemonへ必要なOS/C2C設定だけを引き継ぎ、親shellの秘密情報を渡さない。 */
+export function daemonEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const safe: NodeJS.ProcessEnv = {};
+  for (const key of DAEMON_ENV_KEYS) {
+    const value = env[key];
+    if (value !== undefined) safe[key] = value;
+  }
+  return safe;
+}
+
 /** daemonからの起動をプライバシー初期化付きの共通エントリーへ統一する。 */
 function cliEntry(): { cmd: string; args: string[] } {
   return { cmd: process.execPath, args: [path.resolve(__dirname, "..", "..", "bin", "c2c.js")] };
@@ -44,7 +62,7 @@ export async function ensureBridge(workspaceRoot: string, opts: { port?: number 
       {
         detached: true,
         stdio: ["ignore", out, out],
-        env: { ...process.env },
+        env: daemonEnvironment(),
         windowsHide: true,
       }
     );
