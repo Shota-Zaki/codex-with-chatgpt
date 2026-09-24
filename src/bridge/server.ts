@@ -84,7 +84,7 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
   const workspace = new Workspace(opts.workspaceRoot);
   const host = opts.host ?? DEFAULT_HOST;
   if (host !== "127.0.0.1" && host !== "::1" && host !== "localhost") {
-    throw new Error("The bridge only binds to loopback addresses. Public exposure goes through the tunnel.");
+    throw new Error("Bridgeはループバックアドレスだけで待ち受けます。外部公開はTunnel経由で行ってください。");
   }
 
   const authStore = new AuthStore(workspace.id, { file: opts.authStoreFile });
@@ -153,7 +153,7 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
 
   app.post("/admin/pairing", adminGuard, (_req, res) => {
     const session = pairing.create();
-    logger.info("Created pairing session");
+    logger.info("ペアリングセッションを作成しました");
     res.json({ code: session.code, expiresAt: session.expiresAt });
   });
 
@@ -183,7 +183,7 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
         res.json({ url });
       })
       .catch((error: Error) => {
-        logger.error(`Tunnel start failed: ${error.message}`);
+        logger.error(`Tunnelの起動に失敗しました: ${error.message}`);
         res.status(500).json({ error: "tunnel_failed", message: error.message });
       });
   });
@@ -199,7 +199,7 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
   app.post("/admin/revoke-all", adminGuard, (_req, res) => {
     const count = authStore.revokeAll();
     pairing.invalidateAll();
-    logger.info(`Revoked all tokens (${count})`);
+    logger.info(`全トークンを失効しました（${count}件）`);
     res.json({ revoked: count });
   });
 
@@ -212,7 +212,7 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
 
   const { server, port } = await listen(app, host, opts.port ?? DEFAULT_PORT);
   const startedAt = new Date().toISOString();
-  logger.info(`Bridge listening on ${host}:${port} for workspace ${workspace.name} (${workspace.id})`);
+  logger.info(`Bridgeを${host}:${port}で起動しました。Workspace: ${workspace.name} (${workspace.id})`);
 
   const persistRuntime = (): void => {
     if (opts.persistRuntime === false) return;
@@ -238,7 +238,7 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
     await tunnel.stop().catch(() => undefined);
     await new Promise<void>((resolve) => server.close(() => resolve()));
     if (opts.persistRuntime !== false) clearRuntimeState(workspace.id);
-    logger.info("Bridge stopped");
+    logger.info("Bridgeを停止しました");
   };
 
   return {
