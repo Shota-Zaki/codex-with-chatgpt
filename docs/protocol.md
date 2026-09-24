@@ -1,75 +1,79 @@
-# C2C Agent Protocol
+# C2Cエージェントプロトコル
 
-Control plane: Computer Use (tiny structured messages typed into the ChatGPT UI).
-Data plane: MCP (ChatGPT pulls files, diffs, search results itself).
+C2Cでは、ChatGPTとCodexの間で「状態」と「実データ」を分離します。
 
-Never mix the two: control messages carry state, never content.
+- **Control Plane**: ChatGPT UI上でやり取りする小さい構造化メッセージ
+- **Data Plane**: MCP経由で取得するWorkspace、diff、検索結果、実行記録
 
-## States
+Control Planeへファイル本文・diff・長いログを貼り付けません。
 
-```
+## 状態遷移
+
+```text
 INIT → PLAN → EXECUTING → EXECUTED → REVIEW → PLAN | DONE | BLOCKED | ERROR
 ```
 
-| State | Sender | Meaning |
+| 状態 | 送信者 | 意味 |
 | --- | --- | --- |
-| INIT | Codex | New task; asks ChatGPT to inspect + plan |
-| PLAN | ChatGPT | Executable plan for the next iteration |
-| EXECUTING | Codex | (optional) execution in progress |
-| EXECUTED | Codex | Iteration finished; metadata only |
-| REVIEW | ChatGPT | (implicit) ChatGPT is inspecting via MCP |
-| DONE | ChatGPT | Success criteria met |
-| BLOCKED | ChatGPT | Cannot proceed; contains reason |
-| ERROR | either | Protocol/infrastructure failure |
-| HANDOFF | Codex | Continuation brief sent to a replacement conversation |
+| `INIT` | Codex | 新しいタスク開始。ChatGPTへ調査と計画を依頼 |
+| `PLAN` | ChatGPT | 次の実装単位の計画 |
+| `EXECUTING` | Codex | 実装中 |
+| `EXECUTED` | Codex | 実装完了。メタデータのみ通知 |
+| `REVIEW` | ChatGPT | MCPで差分や実行結果を確認中 |
+| `DONE` | ChatGPT | 受入条件を満たした |
+| `BLOCKED` | ChatGPT | 外部要因等で進行不能 |
+| `ERROR` | どちらでも | プロトコル・基盤エラー |
+| `HANDOFF` | Codex | 新しいChatGPT会話への引継ぎ |
 
-There is no `STATE: RESUME`. If Codex restarts mid-task, it reads a **local
-checkpoint** on the session file (`protocolState`, `waitingFor`, goal, issues,
-next step). Those values are not ChatGPT protocol states. ChatGPT still sees
-only the table above. If the original chat is gone, Codex sends HANDOFF
-built from the checkpoint (never from logs).
+`RESUME` というプロトコル状態はありません。
 
-Local checkpoint values (session only):
+Codex再起動時はローカルcheckpointを読み、必要なら `HANDOFF` を送ります。
 
-| Checkpoint | Meaning |
+## ローカルcheckpoint
+
+session内部では次の状態を保存できます。
+
+| checkpoint | 意味 |
 | --- | --- |
-| `INIT` | INIT sent; waiting for PLAN |
-| `PLAN_RECEIVED` | PLAN in hand; not finished executing |
-| `EXECUTING` | Codex is applying the current PLAN |
-| `EXECUTED_LOCAL` | Recorded locally; EXECUTED not yet typed |
-| `EXECUTED_SENT` | EXECUTED typed; waiting for review |
-| `DONE` / `BLOCKED` | Terminal; DONE should `--clear-checkpoint` |
+| `INIT` | INIT送信済み。PLAN待ち |
+| `PLAN_RECEIVED` | PLAN受信済み。実装未完了 |
+| `EXECUTING` | 実装中 |
+| `EXECUTED_LOCAL` | 実行記録済み。EXECUTED未送信 |
+| `EXECUTED_SENT` | EXECUTED送信済み。レビュー待ち |
+| `DONE` | 完了 |
+| `BLOCKED` | 停止要因あり |
 
-Legacy sessions without a checkpoint keep the old loop. The first normal
-iteration after this version writes a checkpoint automatically.
+checkpointはChatGPTへそのまま公開するプロトコル状態ではありません。
 
-Do not re-pair, recreate the connector, or rewrite Project instructions
-just to resume.
+## Control Message形式
 
-## Message format
+全メッセージは `[C2C]` から開始します。
 
-Every control message starts with `[C2C]` and key-value headers, then sections.
-Keep messages < 1 KB. No diffs, no logs, no file bodies.
+目安は1KB未満です。
 
-### INIT (Codex → ChatGPT)
+### INIT
 
-```
+Codex → ChatGPT
+
+```text
 [C2C]
 STATE: INIT
 TASK_ID: c2c_f81a
 ITERATION: 0
 
 GOAL:
-Implement dark mode.
+ダークモードを実装する。
 
 INSTRUCTION:
-Inspect the connected workspace through Codex with ChatGPT MCP.
-Create an implementation plan for Codex.
+接続中のWorkspaceをMCPで確認し、
+Codexが実行できる次の実装計画を作成してください。
 ```
 
-### PLAN (ChatGPT → Codex)
+### PLAN
 
-```
+ChatGPT → Codex
+
+```text
 [C2C]
 STATE: PLAN
 TASK_ID: c2c_f81a
@@ -96,18 +100,22 @@ SUCCESS_CRITERIA:
 ...
 ```
 
-Plans must be finite, concrete, executable. Not 40-step epics.
+PLANは有限で、実行可能なWork Unitにします。
 
-### EXECUTED (Codex → ChatGPT)
+Repository全体を書き換えるような巨大PLANを1回で返さず、必要に応じて分割します。
 
-```
+### EXECUTED
+
+Codex → ChatGPT
+
+```text
 [C2C]
 STATE: EXECUTED
 TASK_ID: c2c_f81a
 ITERATION: 1
 
 RESULT:
-Execution finished.
+実装完了。
 
 CHANGED_FILES:
 4
@@ -115,34 +123,53 @@ CHANGED_FILES:
 TESTS:
 27 passed
 
-Please independently inspect the workspace and current git diff through MCP.
-If execution_output lists a readable item for this iteration, list then read it.
-If status is restricted, ignore it and review from git_diff.
+MCPで現在のgit diffと実行結果を独立確認してください。
 ```
 
-Before sending EXECUTED, Codex records the iteration:
-`c2c record --task c2c_f81a --iteration 1 --changed-files ... --tests ... --exit-status ok`
-and, when a test/build/lint/typecheck was run, `--command` plus `--output-file`.
-ChatGPT reads metadata via `execution_summary` / `test_status`. Command output
-is a separate opt-in: `execution_output` (`list` then `read`). Codex nominates
-the log; a **local sanitizer** decides whether ChatGPT may see the body
-(tokens/paths redacted; private keys withheld entirely; size/line caps).
-Restricted items appear in `list` with no body. Old records without output
-stay valid. Never paste logs into the control message.
+EXECUTED送信前に、Codexはローカルへ実行記録を保存します。
 
-### DONE / BLOCKED (ChatGPT → Codex)
+例:
 
+```bash
+c2c record \
+  --task c2c_f81a \
+  --iteration 1 \
+  --changed-files 4 \
+  --tests "27 passed" \
+  --exit-status ok
 ```
+
+テスト、build、lint、typecheckを実行した場合は、必要に応じて `--command` と `--output-file` を指定します。
+
+ChatGPTは次を使って確認します。
+
+- `execution_summary`
+- `test_status`
+- `execution_output`
+
+実行出力は明示的に記録されたものだけが対象です。
+
+秘密鍵などの危険な出力は本文を公開しません。
+
+### DONE
+
+ChatGPT → Codex
+
+```text
 [C2C]
 STATE: DONE
 TASK_ID: c2c_f81a
 ITERATION: 3
 
 SUMMARY:
-...
+受入条件を満たしました。
 ```
 
-```
+### BLOCKED
+
+ChatGPT → Codex
+
+```text
 [C2C]
 STATE: BLOCKED
 TASK_ID: c2c_f81a
@@ -155,127 +182,95 @@ NEEDS:
 ...
 ```
 
-### HANDOFF (Codex → new ChatGPT conversation)
+## HANDOFF
 
-`c2c session --json` → `conversation.mode` chooses how chats are grouped.
+ChatGPT会話を切り替える場合は、ログやファイル本文を貼らずに要点だけを引き継ぎます。
 
-- **long-chat:** one long-lived C2C conversation per workspace. Codex opens a
-  replacement chat only when the user asks, the old chat lags, or the chat was
-  lost.
-- **project:** one ChatGPT Project (collection) per workspace. A new Codex
-  conversation starts a new chat **inside that Project**. The same Codex
-  conversation keeps using its saved chat URL.
-
-Right after the boot prompt, Codex sends a HANDOFF so the new chat can
-continue — a brief, never a data dump (the new chat re-reads code via MCP).
-Project instructions and project-only memory hold durable workspace identity.
-HANDOFF still wins for the current task:
-
-Trust order: connector (current code) > HANDOFF (this task) > Project
-instructions > Project memory.
-
-```
+```text
 [C2C]
 STATE: HANDOFF
 TASK_ID: c2c_f81a
 ITERATION: 4
 
 ORIGINAL_GOAL:
-Implement dark mode with a persisted user preference.
+ダークモードを実装する。
 
 PROGRESS:
-- Iter 1-2: theme context + toggle implemented, reviewed OK.
-- Iter 3: persistence added; review found the toggle flashes on load.
+- テーマ状態管理を追加
+- トグルUIを追加
+- 永続化を追加
 
 CURRENT_STATE:
-EXECUTED (iteration 4 fix applied, not yet reviewed).
+EXECUTED
 
 KNOWN_ISSUES:
-Flash-on-load fix needs verification in src/theme/ThemeProvider.tsx.
+初回表示時のちらつき確認が必要。
 
 NEXT_EXPECTED_STEP:
-Independently review iteration 4 via git_diff and reply PLAN or DONE.
+MCPで現在の差分を確認し、PLANまたはDONEを返す。
 ```
 
-## Loop limits
+新しい会話は、必要なコードをMCPで再取得します。
 
-`maxIterations` (default 12, configurable in `.c2c.json`). When reached, Codex
-pauses and asks the user whether to continue.
+## 信頼順序
 
-## Boot Prompt
+情報が競合する場合は次の順序を優先します。
 
-Send once at the start of every new C2C conversation:
+1. MCPで取得した現在のコード
+2. 現在タスクのHANDOFF
+3. Project instructions
+4. Project memory
 
+## Iteration上限
+
+`.c2c.json` の `maxIterations` で上限を設定できます。
+
+既定値は12です。
+
+上限到達時は無限ループを続けず、状態を保存して停止します。
+
+## 新しいChatGPT会話へ最初に渡す指示
+
+以下を基本とします。
+
+```text
+あなたはCodex開発セッションの設計・レビュー担当です。
+
+Codexが実装・shell・Git・テストを実行します。
+あなたは要件整理、計画、レビューを担当します。
+
+現在のローカルWorkspaceは
+「Codex with ChatGPT」MCP Connectorから読み取れます。
+
+ルール:
+1. MCPで読めるファイルの貼り付けをCodexへ要求しない。
+2. タスクに必要なファイルだけ確認する。
+3. 現在コード、git status、git diffをMCPで確認する。
+4. 実行可能な小さいPLANを返す。
+5. EXECUTED後はCodexの自己申告だけで完了判定しない。
+6. git diffと必要な実行記録を独立確認する。
+7. 不要な全面書き換えを避ける。
+8. HANDOFF受信時は現在コードを再確認して継続する。
+9. C2C構造化メッセージを返す。
 ```
-You are the planning and review layer of a Codex coding session.
 
-Codex owns execution.
-You own high-level reasoning, planning and review.
+## 統合Workspace運用
 
-You have access to the current local workspace through the
-"Codex with ChatGPT" MCP connector.
+現在のMac mini運用では次を1つのWorkspaceとして使用します。
 
-Rules:
-
-1. Do not ask Codex to paste files that are available through MCP.
-2. Inspect only the files needed for the task.
-3. Use MCP to inspect current code, git status and diff.
-4. Produce concise executable plans.
-5. Codex will execute your plan using its own harness.
-6. After Codex reports EXECUTED, independently inspect the diff.
-   If execution_output lists a readable item for this iteration, list
-   then read it. If status is restricted, ignore the body and review
-   from git.
-7. Do not assume an implementation succeeded just because Codex says so.
-8. Continue until the implementation satisfies the success criteria.
-9. Avoid unnecessary rewrites.
-10. Return C2C structured control messages.
-11. Be substantive. PLAN and review replies must carry enough signal for
-    Codex to act on: rationale, per-file natural-language suggestions
-    (which file, what to change and why), risks worth checking, and test
-    advice. Never reply with a bare one-liner. Substance over length —
-    but do not generate 40-step epics either.
-12. If you receive a HANDOFF message, this conversation continues an
-    existing task. Trust the handoff brief for history, re-read any code
-    you need through MCP, and resume from NEXT_EXPECTED_STEP.
-13. If this chat sits in a ChatGPT Project, use only the connector named
-    in that Project's instructions. Do not use another workspace's connector.
+```text
+/Volumes/ZAKKO_DEV/repos
 ```
 
-## Project instructions
+複数Repositoryが同じWorkspaceに存在するため、PLANには対象Repository名と対象パスを明示します。
 
-New workspaces store durable identity in the ChatGPT Project settings
-(指令), not in every boot prompt. The Skill fills this template once.
-Never put a public or temporary URL in the instructions — only the
-connector **name**.
+例:
 
+```text
+Repository: Shota-Zaki/Template-Dock
+Path: Template-Dock/
 ```
-You are the planning and review layer for one local workspace. Codex executes.
 
-This Project is bound only to:
-- Workspace name: {{workspace_name}}
-- Kind: {{project_type}} ({{languages}} / {{frameworks}})
-- Connector (use this one only): {{connector_name}}
+別Repositoryへ意図せず変更範囲を広げないことを前提とします。
 
-When you call tools, use ONLY that connector. Do not use any other
-Codex with ChatGPT connector. If workspace_info names a different
-workspace, stop. Do not plan. Do not use this Project's memory.
-
-Read code, git, diffs, and any released command output through that
-connector. Never ask anyone to paste file bodies, diffs, or logs. After
-EXECUTED, call execution_output (list, then read) when a readable item
-exists; if status is restricted, review from git instead. Never upload
-the repo into this Project's files or sources.
-
-When facts conflict, trust this order:
-1. Current code from the connector
-2. A HANDOFF in this chat (this task's goal, progress, next step)
-3. These instructions
-4. This Project's memory (durable architecture only; stale memory loses)
-
-This Project's memory is only for this workspace. On HANDOFF, trust the
-brief, re-read code through the connector, and resume at NEXT_EXPECTED_STEP.
-
-Be substantive: why, which file, what to test. No empty one-liners and
-no 40-step epics. Use C2C control messages.
-```
+各Repositoryの `.c2cignore` は独立して適用されます。
