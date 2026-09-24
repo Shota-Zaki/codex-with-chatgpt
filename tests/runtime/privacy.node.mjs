@@ -70,6 +70,26 @@ test('外部への本文送信を拒否', async () => {
   assert.equal(c.calls.length, 0);
 });
 
+test('Quick Tunnelのhealthだけを本文なしで許可', async () => {
+  const c = capture();
+  await c.fetch(new Request('https://random-words-123.trycloudflare.com/health', {
+    headers: { authorization: 'Bearer SECRET', cookie: 'secret=1' },
+  }));
+  assert.equal(c.calls.length, 1);
+  assert.equal(c.calls[0].url, 'https://random-words-123.trycloudflare.com/health');
+  assert.deepEqual([...c.calls[0].headers], [['accept', 'application/json']]);
+  assert.equal(c.calls[0].body, null);
+});
+
+test('Quick Tunnelでもhealth以外は拒否', async () => {
+  const c = capture();
+  await assert.rejects(
+    c.fetch('https://random-words-123.trycloudflare.com/mcp'),
+    /C2C_EGRESS_DENIED/
+  );
+  assert.equal(c.calls.length, 0);
+});
+
 test('IPv6ループバック', async () => {
   const c = capture();
   await c.fetch('http://[::1]:48765/health');
