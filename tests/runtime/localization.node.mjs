@@ -72,6 +72,9 @@ test('MCPの利用者向け説明を日本語で保持', () => {
     'Recent Codex execution records',
     'List or read command output',
     'Sanitized command output returned by the read operation',
+    'This output was not released for ChatGPT to read.',
+    'No execution output with id',
+    'Codex harness',
   ]) {
     assert.equal(source.includes(phrase), false, 'MCP説明に英語UI文言が残っています: ' + phrase);
   }
