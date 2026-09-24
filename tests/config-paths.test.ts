@@ -31,6 +31,7 @@ describe("secure state JSON", () => {
   });
 
   it("symlinkを状態ファイルとして読み書きしない", () => {
+    if (process.platform === "win32") return;
     const dir = tempDir();
     const target = path.join(dir, "outside.json");
     const file = path.join(dir, "state.json");
