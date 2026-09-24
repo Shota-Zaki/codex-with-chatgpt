@@ -123,9 +123,7 @@ export class ProcessCloudflaredAccount implements CloudflaredAccount {
         }
         reject(
           new Error(
-            `Cloudflareログインを完了できませんでした${code !== 0 ? ` (exit ${code})` : ""}${
-              output.trim() ? `: ${output.trim().slice(0, 400)}` : ""
-            }`
+            `Cloudflareログインを完了できませんでした${code !== 0 ? `（終了コード ${code}）` : ""}`
           )
         );
       });
