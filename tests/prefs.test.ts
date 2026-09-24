@@ -1,36 +1,30 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  mergeUiPrefs,
-  prefsFile,
-  readUiPrefs,
-  SETUP_CHOICE_PROMPT,
-} from "../src/config/ui-prefs.js";
+import { mergeUiPrefs, prefsFile, readUiPrefs, SETUP_CHOICE_PROMPT } from "../src/config/ui-prefs.js";
 import { cleanup, isolateStateDir } from "./helpers.js";
 
-describe("ui prefs", () => {
+describe("初回設定の保存", () => {
   const dirs: string[] = [];
-
   afterEach(() => {
     for (const dir of dirs) cleanup(dir);
     dirs.length = 0;
     delete process.env.C2C_STATE_DIR;
   });
 
-  it("starts empty and is not bound to a workspace", () => {
+  it("初期状態は未選択で、日本語の案内を返す", () => {
     dirs.push(isolateStateDir());
     const prefs = readUiPrefs();
     expect(prefs.developerModeEnabled).toBe(false);
     expect(prefs.setupMode).toBeNull();
     expect(prefs.remembered).toEqual({ developerMode: false, setupMode: false });
     expect(prefs.setupChoicePrompt).toBe(SETUP_CHOICE_PROMPT);
-    expect(prefs.setupChoicePrompt).toContain("AI 自动化配置（预览版）");
-    expect(prefs.setupChoicePrompt).toContain("手动教学配置");
-    expect(prefs.setupChoicePrompt).toContain("请回复「1」或「2」");
+    expect(prefs.setupChoicePrompt).toContain("AIによる自動設定（プレビュー）");
+    expect(prefs.setupChoicePrompt).toContain("手動ガイド設定");
+    expect(prefs.setupChoicePrompt).toContain("「1」または「2」を選択してください。");
   });
 
-  it("remembers developer mode as on only, never as off", () => {
+  it("確認済みの開発者モードだけを記録し、認証情報を含めない", () => {
     dirs.push(isolateStateDir());
     const saved = mergeUiPrefs({ developerModeEnabled: true });
     expect(saved.developerModeEnabled).toBe(true);
@@ -39,7 +33,7 @@ describe("ui prefs", () => {
     expect(JSON.stringify(raw)).not.toMatch(/token|pairing|secret/i);
   });
 
-  it("saves setup mode without dropping developer mode", () => {
+  it("方式を変更しても開発者モードの確認を保持する", () => {
     dirs.push(isolateStateDir());
     mergeUiPrefs({ developerModeEnabled: true });
     const next = mergeUiPrefs({ setupMode: "manual" });
@@ -50,13 +44,13 @@ describe("ui prefs", () => {
     expect(auto.developerModeEnabled).toBe(true);
   });
 
-  it("rejects an unknown setup mode", () => {
+  it("不明な方式を保存しない", () => {
     dirs.push(isolateStateDir());
     expect(() => mergeUiPrefs({ setupMode: "browser" as "auto" })).toThrow(/setup-mode/);
     expect(readUiPrefs().setupMode).toBeNull();
   });
 
-  it("ignores a hand-edited developerModeEnabled false", () => {
+  it("手動でfalseとされた状態を確認済みとして扱わない", () => {
     dirs.push(isolateStateDir());
     fs.mkdirSync(path.dirname(prefsFile()), { recursive: true });
     fs.writeFileSync(
