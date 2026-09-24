@@ -48,7 +48,7 @@ describe("port collision handling", () => {
     write(root, "c.txt", "c");
     await expect(
       startBridge({ workspaceRoot: root, host: "0.0.0.0", persistRuntime: false })
-    ).rejects.toThrow(/loopback/);
+    ).rejects.toThrow(/ループバック/);
     cleanup(root);
   });
 });
