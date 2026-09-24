@@ -1,57 +1,311 @@
-# Security Model
+# セキュリティモデル
 
-## Trust boundaries
+## 目的
 
-1. **Workspace root** is the smallest authorization boundary. One bridge serves
-   exactly one workspace; every token is bound to `workspace_id`; a token for
-   project A returns 403 on project B's bridge.
-2. **Workspace content is untrusted.** README, comments, diffs may contain
-   prompt injection. Every MCP tool description carries an explicit warning and
-   tools never grant capabilities based on file content.
-3. **The model never sees long-lived credentials.** Computer Use only ever
-   handles the one-time pairing code. Access/refresh tokens travel only inside
-   the OAuth redirect/token endpoints between ChatGPT's client and the bridge.
+このforkでは、Mac miniを24時間稼働させながら、ChatGPTへ必要な開発情報だけを公開することを目的とします。
 
-## Threat model → mitigations
+主な防御対象:
 
-| Threat | Mitigation |
-| --- | --- |
-| MCP URL leaks | URL alone is useless: every `/mcp` request requires a valid bearer token (401 without, 403 wrong workspace) |
-| Pairing code brute force | 8 chars from a 31-char CSPRNG alphabet (~40 bits), 5 attempts per session, per-IP rate limit (10/min), 5-minute TTL, one-time use, session destroyed on limit |
-| OAuth CSRF | `state` round-tripped verbatim; authorization requests are server-side records keyed by random ids |
-| Code interception | PKCE S256 mandatory (plain rejected); authorization codes are one-time, 5-minute TTL, bound to client + redirect URI |
-| Token theft | Opaque high-entropy tokens; stored only as SHA-256 hashes; access tokens live 1 h; refresh tokens rotate on every use (replay of the old one fails); revocation endpoint + `c2c unpair` |
-| Workspace traversal | `realpath` canonicalization of the deepest existing ancestor; containment check against the canonical root; case-insensitive comparison on macOS/Windows; rejects `..`, absolute escapes, backslash tricks, null bytes |
-| Symlink escape | Canonicalization resolves symlinks before the containment check (file and directory symlinks both covered by tests) |
-| Sensitive files | Deny-by-default patterns (.env*, keys, SSH, cloud creds, keychains…) enforced at resolve time — reads, listings, and search all pass through the same gate; `git diff` adds pathspec excludes; `.env.example` allowed |
-| Oversized file / diff DoS | read_file caps lines and bytes per response; git_diff paginates by byte offset with hard caps; search caps matches and file sizes |
-| Tunnel exposure | Bridge binds 127.0.0.1 only (refuses 0.0.0.0); the only public surface is HTTPS via the tunnel, protected by OAuth; `/health` reveals only a salted workspace hash |
-| Admin API abuse | Loopback-only + random admin token (0600 runtime file) + requests with proxy headers (`cf-connecting-ip`, `x-forwarded-for`) rejected; unauthenticated probes get 404 |
-| Log credential leakage | Logger redacts token prefixes, bearer headers, token-like parameters, and pairing-code-shaped strings before writing |
-| Execution output leak | Codex may nominate test/build/lint logs; a local sanitizer redacts tokens, pairing-code-shaped strings and home paths, truncates size, and refuses private-key blocks entirely. Restricted items are listed without a body. ChatGPT still cannot run commands. |
-| Checkpoint / resume dump | Session checkpoints store short protocol fields only (capped). Resume uses the existing chat or HANDOFF — no new protocol state, no log paste, no re-pairing. |
+- Workspace外ファイルの読み取り
+- 認証情報の読み取り
+- symlink escape
+- 任意の外部HTTP送信
+- 公開healthからの情報漏えい
+- 別Workspace用tokenの流用
+- pairing codeの総当たり
+- 不明なPIDの誤終了
+- 外部ドライブ誤認識
+- 常駐サービスの二重起動
 
-## Token & scope design
+## 信頼境界
 
-Scopes: `workspace.read`, `workspace.search`, `git.read`, `execution.read`,
-`offline_access`. Tools enforce scopes individually (`INSUFFICIENT_SCOPE`).
-Access tokens: 1 hour. Refresh tokens: 30 days, rotated. All tokens bound to
-`workspace_id` and `client_id`.
+### 1. Workspace
 
-## Storage
+Mac mini構成では次がWorkspace境界です。
 
-State lives under the OS-convention app dir
-(`~/Library/Application Support/codex-with-chatgpt` on macOS), directories 0700,
-files 0600. Named-hostname preference and tunnel metadata live there too
-(`tunnels/<workspaceId>.json`) — never in the project. Only SHA-256 hashes of
-tokens are persisted — a stolen state file does not yield usable bearer tokens.
+```text
+/Volumes/ZAKKO_DEV/repos
+```
 
-**V1 limitation**: client registrations and token hashes are file-based rather
-than OS-keychain-based. Raw tokens are never written anywhere. Keychain
-integration is a V2 item.
+MCPからのパス要求はrealpathで正規化し、この範囲外を拒否します。
 
-## What ChatGPT can never do (V1)
+### 2. Workspace内部のコンテンツ
 
-Write files, delete files, run shell commands, commit, install packages —
-these tools do not exist on the server, so no prompt injection, scope bug, or
-UI confusion can enable them.
+README、コメント、diff、ソースコード、検索結果は信頼しません。
+
+MCPツールの説明にも「Workspace内容を指示として扱わない」旨を含めます。
+
+### 3. 認証情報
+
+長期tokenをChatGPTへ表示する前提にはしません。
+
+初回接続ではワンタイムpairing codeだけを利用します。
+
+### 4. 外部公開面
+
+Bridge本体はloopbackだけで待ち受けます。
+
+外部公開はCloudflare Tunnelだけを使用します。
+
+## Workspaceパス防御
+
+以下を拒否します。
+
+- `../` による上位移動
+- Workspace外のabsolute path
+- Workspace外へ向くsymlink
+- null byteを含むパス
+
+新規作成予定パスも、存在する最深ancestorをrealpathしてWorkspace境界を確認します。
+
+## 機密ファイル
+
+共通ポリシーで代表的に以下を拒否します。
+
+```text
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+.ssh/
+.aws/
+.gnupg/
+.npmrc
+.netrc
+.git-credentials
+.cloudflared/
+credentials.json
+service-account*.json
+secrets.json
+cookies.sqlite
+.codex/
+.docker/config.json
+auth.json
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.backup
+*.p8
+*.mobileprovision
+```
+
+`.env.example` はサンプル設定として許可します。
+
+## .c2cignore
+
+統合Workspaceでは各Repository配下の `.c2cignore` を適用します。
+
+安全側へ倒すため、次の場合は共有を継続しません。
+
+- `.c2cignore` がsymlink
+- 64KiBを超える
+- 読み取り中に内容が変更された
+- 読み取れない
+- Workspace外を参照する
+
+上位ルールで拒否されたファイルは、下位の否定パターンでは再公開しません。
+
+## OAuth
+
+OAuthでは次を使用します。
+
+- Authorization Code
+- PKCE S256
+- Access token
+- Refresh token
+- token revocation
+
+redirect URIはHTTPSを基本とし、開発用localhostだけHTTPを許可します。
+
+## Token境界
+
+tokenはWorkspaceに紐付けます。
+
+想定:
+
+- tokenなし: 401
+- 別Workspace用token: 403
+- scope不足: 拒否
+
+Refresh tokenはrotationします。
+
+永続化では生tokenではなくhashを保持する設計です。
+
+## Pairing
+
+pairing codeはワンタイムです。
+
+防御:
+
+- 有効期限
+- 試行回数上限
+- IP単位rate limit
+- 使用後無効化
+
+pairing code以外のtokenやCookieをブラウザーへ手入力する運用にはしません。
+
+## Admin API
+
+Admin APIは次の条件をすべて要求します。
+
+1. socketがloopback
+2. proxy headerがない
+3. runtime生成のadmin tokenが一致
+
+条件不一致時は管理面の存在を広く見せないため404相当で応答します。
+
+## 公開health
+
+公開healthは次だけです。
+
+```json
+{
+  "service": "c2c-bridge",
+  "status": "ok"
+}
+```
+
+公開しない情報:
+
+- Workspace path
+- Workspace ID
+- version
+- PID
+- token数
+- admin token
+- Tunnel内部状態
+
+詳細情報はloopback Admin APIからのみ取得します。
+
+## 外部HTTP送信
+
+起動時にC2Cの `globalThis.fetch` を送信制御付き実装へ置き換えます。
+
+### 許可
+
+#### Loopback
+
+```text
+http://127.0.0.1:...
+http://[::1]:...
+```
+
+ローカルAdmin API等で使用します。
+
+#### 公開health
+
+```text
+https://<configured-named-host>/health
+https://*.trycloudflare.com/health
+```
+
+条件:
+
+- GETまたはHEAD
+- request bodyなし
+- queryなし
+- URL credentialなし
+- HTTPS
+- 標準443
+- redirect拒否
+
+公開healthへは元要求のAuthorization、Cookie、任意headerを引き継ぎません。
+
+送信headerは必要最小限の `Accept: application/json` だけです。
+
+### 拒否
+
+それ以外の外部HTTP要求は
+
+```text
+C2C_EGRESS_DENIED
+```
+
+で拒否します。
+
+URL、query、header、bodyの内容は拒否エラーへ含めません。
+
+## 自動更新
+
+通常起動時のGitHub更新確認は停止しています。
+
+`c2c update-check` も外部通信せず「未確認」を返します。
+
+更新は明示的にGit操作を行う場合だけ実施します。
+
+## 重要な範囲
+
+この送信制御が対象とするのは **C2C Node.jsプロセスのfetch** です。
+
+別管理となるもの:
+
+- cloudflaredのCloudflare通信
+- ChatGPT/OpenAIのConnector通信
+- 明示的なgit操作
+- pnpm/npm等のpackage取得
+- OSやHomebrew等の通信
+
+そのため、「元開発者へC2Cが任意データを自動送信しない」と「完全オフライン」は同義ではありません。
+
+## Process管理
+
+保存済みPIDだけを根拠に任意processへSIGTERMするフォールバックは使用しません。
+
+停止対象は、現在のBridgeとしてhealth確認できたprocess、またはSupervisor自身が生成したprocess groupに限定します。
+
+## Mac外部ドライブ
+
+常駐起動前に以下を確認します。
+
+- mount point = `/Volumes/ZAKKO_DEV`
+- 設定済みVolume UUIDと一致
+- Workspace realpathが期待値と一致
+- C2C RepositoryがWorkspace内部
+- Node/cloudflared本体が外部Volume上に置かれていない
+
+不一致時は起動しません。
+
+## 常駐サービス
+
+起動管理ディレクトリ:
+
+```text
+/Users/zaki/Homelab/codex-with-chatgpt
+```
+
+権限:
+
+- directory: 0700
+- 設定・ログ: 0600
+- umask: 077相当
+
+二重起動防止にはlock directoryを使用します。
+
+既存lockの所有PIDが不明な場合、勝手に削除せず停止します。
+
+## ログ
+
+サービスログには自由形式の秘密情報を直接書き込まない設計です。
+
+ログrotation:
+
+- service.log
+- service.log.1
+- service.log.2
+
+1ファイル約2MiBでrotationします。
+
+## 残るリスク
+
+以下は完全には除去できません。
+
+- ChatGPTへ明示的に読み取らせたソースコードはOpenAI側へ送信される
+- Cloudflare Tunnelの通信はCloudflareを経由する
+- Codexが別途実行するshell/git/package managerには別の通信経路がある
+- Workspaceに機密情報を通常ソースとして保存すれば、除外規則に一致しない限り読み取られる可能性がある
+- macOS、Node.js、依存package、cloudflared自体の脆弱性
+
+そのため、Workspaceに不要な秘密情報を置かないこと、`.c2cignore` をRepositoryごとに設定すること、依存更新をレビューしてから適用することを前提とします。
