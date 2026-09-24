@@ -55,7 +55,7 @@ MCPツール自体は読み取り専用です。ChatGPTがファイル編集やs
 
 この制御は **C2CのNode.js `fetch` 経路**を対象にします。以下は別プロセス・別経路です。
 
-- `cloudflared` がCloudflareへ行うTunnel通信
+- `cloudflared` がCloudflareへ行うTunnel通信（親shellのAPIキー等は継承せず、OS実行に必要な環境変数だけを渡します）
 - ChatGPT/OpenAI側のConnector通信
 - ユーザーまたはCodexが明示的に実行する `git fetch/pull/push`
 - package managerが明示的な導入時に行う通信
