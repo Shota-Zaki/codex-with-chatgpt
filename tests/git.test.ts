@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { gitDiff, gitInfo, gitStatus } from "../src/workspace/git.js";
+import { gitDiff, gitEnvironment, gitInfo, gitStatus } from "../src/workspace/git.js";
 import { makeTmpDir, cleanup, write, makeGitRepo, git } from "./helpers.js";
 
 let repo: string;
@@ -20,6 +20,36 @@ afterAll(() => {
   delete process.env.GIT_CEILING_DIRECTORIES;
   cleanup(repo);
   cleanup(plain);
+});
+
+describe("gitEnvironment", () => {
+  it("読み取りGitに必要な設定だけを継承し秘密情報と注入用変数を除外する", () => {
+    const env = gitEnvironment({
+      HOME: "/Users/test",
+      PATH: "/usr/bin:/bin",
+      GIT_CEILING_DIRECTORIES: "/tmp/scope",
+      GIT_EXTERNAL_DIFF: "/tmp/evil-diff",
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "core.fsmonitor",
+      GIT_CONFIG_VALUE_0: "/tmp/evil-hook",
+      GIT_SSH_COMMAND: "ssh -o ProxyCommand=evil",
+      GITHUB_TOKEN: "secret",
+      OPENAI_API_KEY: "secret",
+    });
+
+    expect(env.HOME).toBe("/Users/test");
+    expect(env.PATH).toBe("/usr/bin:/bin");
+    expect(env.GIT_CEILING_DIRECTORIES).toBe("/tmp/scope");
+    expect(env.GIT_OPTIONAL_LOCKS).toBe("0");
+    expect(env.GIT_TERMINAL_PROMPT).toBe("0");
+    expect(env.GIT_EXTERNAL_DIFF).toBeUndefined();
+    expect(env.GIT_CONFIG_COUNT).toBeUndefined();
+    expect(env.GIT_CONFIG_KEY_0).toBeUndefined();
+    expect(env.GIT_CONFIG_VALUE_0).toBeUndefined();
+    expect(env.GIT_SSH_COMMAND).toBeUndefined();
+    expect(env.GITHUB_TOKEN).toBeUndefined();
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+  });
 });
 
 describe("gitInfo", () => {
