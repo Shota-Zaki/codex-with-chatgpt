@@ -29,6 +29,8 @@ const simplifiedPhrases = [
   '新版本',
   '用户可运行',
   '完成后再试',
+  '新的接続先',
+  'Everything looks good.',
 ];
 
 test('利用者向け主要ファイルに簡体字UI文言を残さない', () => {
