@@ -100,13 +100,8 @@ export class ProcessCloudflaredAccount implements CloudflaredAccount {
     if (this.hasCert()) return;
     const bin = this.binary();
     await new Promise<void>((resolve, reject) => {
-      const child = spawn(bin, ["tunnel", "login"], { stdio: ["ignore", "pipe", "pipe"] });
-      let output = "";
-      const collect = (chunk: Buffer): void => {
-        output += chunk.toString("utf8");
-      };
-      child.stdout?.on("data", collect);
-      child.stderr?.on("data", collect);
+      // 明示的な対話ログインなのでCloudflareの案内はローカル端末へ直接表示し、C2Cでは保持しない。
+      const child = spawn(bin, ["tunnel", "login"], { stdio: "inherit", windowsHide: true });
       const timer = setTimeout(() => {
         child.kill("SIGTERM");
         reject(new Error("Cloudflareログインがタイムアウトしました"));
