@@ -21,6 +21,7 @@ export function validateConfig(c) {
   if (c.volume !== '/Volumes/ZAKKO_DEV' || c.workspace !== path.join(c.volume, 'repos')) throw new Error('SERVICE_WORKSPACE_SCOPE');
   if (!within(c.workspace, c.repository) || c.repository === c.workspace) throw new Error('SERVICE_REPOSITORY_SCOPE');
   if (c.runtimeDir !== path.join(c.home, 'Homelab', 'codex-with-chatgpt')) throw new Error('SERVICE_RUNTIME_SCOPE');
+  if (!within(c.home, c.stateDir) || c.stateDir === c.home) throw new Error('SERVICE_STATE_SCOPE');
   if (within('/Volumes', c.node)) throw new Error('SERVICE_NODE_ON_EXTERNAL_VOLUME');
   if (!/^[a-f0-9-]{16,64}$/i.test(c.volumeUUID || '')) throw new Error('SERVICE_VOLUME_UUID');
   if (!/^[a-z_][a-z0-9_-]*[$]?$/i.test(c.user || '')) throw new Error('SERVICE_USER');
