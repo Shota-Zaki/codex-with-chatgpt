@@ -32,7 +32,7 @@ export function bearerAuth(deps: BearerAuthDeps) {
     const token = header.slice(7).trim();
     const verdict = deps.store.verifyAccessToken(token);
     if (!verdict.ok) {
-      deps.logger.warn(`Rejected MCP request: token ${verdict.reason}`);
+      deps.logger.warn(`MCP要求を拒否しました: token ${verdict.reason}`);
       res
         .status(401)
         .set("WWW-Authenticate", challenge("invalid_token", `Token ${verdict.reason}`))
@@ -40,7 +40,7 @@ export function bearerAuth(deps: BearerAuthDeps) {
       return;
     }
     if (verdict.record.workspaceId !== deps.workspaceId) {
-      deps.logger.warn("Rejected MCP request: token bound to a different workspace");
+      deps.logger.warn("MCP要求を拒否しました: tokenが別Workspaceに紐付いています");
       res.status(403).json({
         error: "forbidden",
         error_description: "This token is not authorized for the connected workspace",
