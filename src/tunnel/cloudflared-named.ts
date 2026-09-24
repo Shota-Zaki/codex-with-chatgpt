@@ -20,7 +20,7 @@ export interface CloudflaredNamedTunnelOptions {
 export function normalizeNamedTunnelHostname(hostname: string): string {
   const normalized = hostname.trim().toLowerCase().replace(/\.$/, "");
   if (!HOSTNAME_RE.test(normalized)) {
-    throw new Error(`Invalid named tunnel hostname: ${hostname}`);
+    throw new Error(`固定Tunnelのホスト名が無効です: ${hostname}`);
   }
   return normalized;
 }
@@ -46,7 +46,7 @@ export class CloudflaredNamedTunnel implements TunnelProvider {
   constructor(opts: CloudflaredNamedTunnelOptions) {
     const tunnelName = opts.tunnelName.trim();
     if (!tunnelName || tunnelName.length > 128) {
-      throw new Error("Named tunnel name must be between 1 and 128 characters");
+      throw new Error("固定Tunnel名は1～128文字で指定してください");
     }
     this.tunnelName = tunnelName;
     this.hostname = normalizeNamedTunnelHostname(opts.hostname);
@@ -68,7 +68,7 @@ export class CloudflaredNamedTunnel implements TunnelProvider {
     const bin = this.binary();
     if (!bin) {
       throw new Error(
-        "cloudflared is not installed. Install it (e.g. `brew install cloudflared`) and retry."
+        "cloudflaredがインストールされていません。`brew install cloudflared`などで導入してから再試行してください。"
       );
     }
 
@@ -99,9 +99,9 @@ export class CloudflaredNamedTunnel implements TunnelProvider {
       };
       const timeout = setTimeout(() => {
         if (!this.connected) {
-          this.lastError = "Named tunnel start timed out";
+          this.lastError = "固定Tunnelの起動がタイムアウトしました";
           child.kill("SIGTERM");
-          finish(() => reject(new Error(this.lastError ?? "Named tunnel start timed out")));
+          finish(() => reject(new Error(this.lastError ?? "固定Tunnelの起動がタイムアウトしました")));
         }
       }, this.startTimeoutMs);
 
@@ -111,7 +111,7 @@ export class CloudflaredNamedTunnel implements TunnelProvider {
           if (CONNECTED_RE.test(line) && !this.connected) {
             this.connected = true;
             const url = this.publicUrl();
-            this.logger.info(`Named tunnel established: ${url}`);
+            this.logger.info(`固定Tunnelを確立しました: ${url}`);
             finish(() => resolve(url));
           }
           if (/\b(error|failed|fatal)\b/i.test(line)) {
@@ -130,14 +130,14 @@ export class CloudflaredNamedTunnel implements TunnelProvider {
       });
       child.on("exit", (code) => {
         const wasStarting = !this.connected;
-        this.logger.warn(`cloudflared named tunnel exited with code ${code}`);
+        this.logger.warn(`固定Tunnelのcloudflaredが終了しました（終了コード ${code}）`);
         this.child = null;
         this.connected = false;
         if (wasStarting) {
           finish(() =>
             reject(
               new Error(
-                `cloudflared exited (code ${code}) before establishing the named tunnel${
+                `固定Tunnel確立前にcloudflaredが終了しました（終了コード ${code}）${
                   this.lastError ? `: ${this.lastError}` : ""
                 }`
               )
@@ -177,9 +177,9 @@ export class CloudflaredNamedTunnel implements TunnelProvider {
   async doctor(): Promise<TunnelDoctorReport> {
     const bin = this.binary();
     const problems: string[] = [];
-    if (!bin) problems.push("cloudflared binary not found");
-    if (bin && !this.child) problems.push("named tunnel process not running");
-    if (this.child && !this.connected) problems.push("named tunnel is not connected yet");
+    if (!bin) problems.push("cloudflared実行ファイルが見つかりません");
+    if (bin && !this.child) problems.push("固定Tunnelプロセスが停止しています");
+    if (this.child && !this.connected) problems.push("固定Tunnelはまだ接続されていません");
     return {
       provider: this.name,
       binaryFound: bin !== null,
