@@ -242,7 +242,7 @@ URL、query、header、bodyの内容は拒否エラーへ含めません。
 
 別管理となるもの:
 
-- cloudflaredのCloudflare通信
+- cloudflaredのCloudflare通信（子プロセス環境はallowlist化し、APIキー・GitHub token・`NODE_OPTIONS`等を継承しない）
 - ChatGPT/OpenAIのConnector通信
 - 明示的なgit操作
 - pnpm/npm等のpackage取得
