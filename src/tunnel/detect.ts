@@ -2,6 +2,22 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
+const CLOUDFLARED_ENV_KEYS = [
+  "HOME", "USER", "LOGNAME", "PATH", "PATHEXT", "SYSTEMROOT", "SystemRoot", "WINDIR", "ComSpec",
+  "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "APPDATA", "TEMP", "TMP", "TMPDIR",
+  "LANG", "LC_ALL", "TZ", "SSL_CERT_FILE", "SSL_CERT_DIR", "TUNNEL_ORIGIN_CERT",
+] as const;
+
+/** cloudflaredへ親shellのAPIキーや認証トークンを渡さない。 */
+export function cloudflaredEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const safe: NodeJS.ProcessEnv = {};
+  for (const key of CLOUDFLARED_ENV_KEYS) {
+    const value = env[key];
+    if (value !== undefined) safe[key] = value;
+  }
+  return safe;
+}
+
 const COMMON_DIRS = [
   "/opt/homebrew/bin",
   "/usr/local/bin",
@@ -34,6 +50,7 @@ export function findBinary(name: string): string | null {
       stdio: "ignore",
       timeout: 5000,
       windowsHide: true,
+      env: cloudflaredEnvironment(),
     });
     if (probe.status === 0 || probe.status === 1) return exe; // on PATH
   } catch {
