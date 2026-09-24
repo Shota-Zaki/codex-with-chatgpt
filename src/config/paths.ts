@@ -1,6 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
+import { randomBytes } from "node:crypto";
 
 /**
  * State directory resolution, following OS conventions.
@@ -31,19 +32,38 @@ export function stateSubdir(name: string): string {
   return ensureDir(path.join(getStateDir(), name));
 }
 
-/** Write a JSON file with owner-only permissions. */
+/** Write a JSON file atomically with owner-only permissions. */
 export function writeSecureJson(file: string, data: unknown): void {
   ensureDir(path.dirname(file));
-  fs.writeFileSync(file, JSON.stringify(data, null, 2), { mode: 0o600 });
+  if (fs.existsSync(file)) {
+    const current = fs.lstatSync(file);
+    if (!current.isFile() || current.isSymbolicLink()) {
+      throw new Error("状態ファイルが通常ファイルではないため書き込みを停止しました。");
+    }
+  }
+
+  const temp = `${file}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
   try {
-    fs.chmodSync(file, 0o600);
-  } catch {
-    // best effort on platforms without chmod semantics
+    fs.writeFileSync(temp, JSON.stringify(data, null, 2), { flag: "wx", mode: 0o600 });
+    fs.renameSync(temp, file);
+    try {
+      fs.chmodSync(file, 0o600);
+    } catch {
+      // best effort on platforms without chmod semantics
+    }
+  } finally {
+    try {
+      fs.rmSync(temp, { force: true });
+    } catch {
+      // rename後は存在しない。失敗時も一時ファイルの削除だけを試みる。
+    }
   }
 }
 
 export function readJsonIfExists<T>(file: string): T | null {
   try {
+    const current = fs.lstatSync(file);
+    if (!current.isFile() || current.isSymbolicLink()) return null;
     return JSON.parse(fs.readFileSync(file, "utf8")) as T;
   } catch {
     return null;
