@@ -183,13 +183,13 @@ export function mergeSession(previous: SavedSession | null, patch: SessionPatch)
   if (rawProjectUrl) {
     const normalized = normalizeProjectUrl(rawProjectUrl);
     if (!normalized) {
-      throw new Error("project URL must look like https://chatgpt.com/g/g-p-…/project");
+      throw new Error("project URLには https://chatgpt.com/g/g-p-…/project 形式を指定してください");
     }
     projectUrl = normalized;
   }
 
   if (conversationMode === "project" && !projectUrl && !previous?.projectUrl) {
-    throw new Error("project mode requires --project-url");
+    throw new Error("projectモードでは --project-url が必要です");
   }
 
   const url = patch.url ?? previous?.url;
@@ -198,7 +198,7 @@ export function mergeSession(previous: SavedSession | null, patch: SessionPatch)
   const hasTask = Boolean(patch.taskId ?? previous?.taskId);
   const hasCheckpoint = Boolean(patch.checkpoint || patch.clearCheckpoint || previous?.checkpoint);
   if (!hasChat && !hasProject && conversationMode !== "long-chat" && !hasTask && !hasCheckpoint) {
-    throw new Error("nothing to save: pass --url, --project-url, or --mode");
+    throw new Error("保存対象がありません。--url、--project-url、--mode のいずれかを指定してください");
   }
 
   let checkpoint = previous?.checkpoint;
@@ -214,14 +214,14 @@ export function mergeSession(previous: SavedSession | null, patch: SessionPatch)
       0;
     const protocolState = patch.checkpoint.protocolState ?? previous?.checkpoint?.protocolState;
     if (!taskId || !protocolState) {
-      throw new Error("checkpoint requires task id and protocol state");
+      throw new Error("checkpointにはtask idとprotocol stateが必要です");
     }
     if (!PROTOCOL_STATES.includes(protocolState)) {
-      throw new Error(`protocol-state must be one of ${PROTOCOL_STATES.join(", ")}`);
+      throw new Error(`protocol-stateには次のいずれかを指定してください: ${PROTOCOL_STATES.join(", ")}`);
     }
     const waitingFor = patch.checkpoint.waitingFor ?? previous?.checkpoint?.waitingFor ?? "none";
     if (!WAITING_FOR.includes(waitingFor)) {
-      throw new Error(`waiting-for must be one of ${WAITING_FOR.join(", ")}`);
+      throw new Error(`waiting-forには次のいずれかを指定してください: ${WAITING_FOR.join(", ")}`);
     }
     checkpoint = {
       taskId,
