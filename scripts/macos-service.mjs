@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { stateDirectory } from '../runtime/privacy.mjs';
-import { LABEL, RUNTIME_FILES, validateConfig, volumeInfo, renderPlist, writePrivate } from '../runtime/service-common.mjs';
+import { LABEL, RUNTIME_FILES, validateConfig, volumeInfo, renderPlist, writePrivate, within } from '../runtime/service-common.mjs';
 
 function main() {
   const command = process.argv[2] || 'plan';
@@ -57,6 +57,12 @@ function main() {
   }
 
   const repository = fs.realpathSync.native(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'));
+  const requestedStateDir = path.resolve(stateDirectory());
+  if (!within(home, requestedStateDir) || requestedStateDir === home) {
+    throw new Error('C2Cの状態保存先はユーザーホーム配下にしてください。');
+  }
+  fs.mkdirSync(requestedStateDir, { recursive: true, mode: 0o700 });
+  const stateDir = fs.realpathSync.native(requestedStateDir);
   const disk = volumeInfo('/Volumes/ZAKKO_DEV');
   if (disk.mount !== '/Volumes/ZAKKO_DEV') throw new Error('外部ドライブの接続を確認してください。');
 
@@ -70,7 +76,7 @@ function main() {
     workspace: '/Volumes/ZAKKO_DEV/repos',
     node: fs.realpathSync.native(process.execPath),
     user: os.userInfo().username,
-    stateDir: stateDirectory(),
+    stateDir,
     ...(process.env.C2C_CLOUDFLARED_PATH?.trim()
       ? { cloudflaredPath: fs.realpathSync.native(process.env.C2C_CLOUDFLARED_PATH) }
       : {}),
