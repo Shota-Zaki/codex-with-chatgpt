@@ -9,12 +9,13 @@ async function main() {
   if (!volumeReady(c)) return 10;
 
   const load = relative => import(pathToFileURL(path.join(c.repository, 'dist', relative)).href);
-  const [{ Workspace }, { findBridgeObservation }, { readTunnelState, isNamedTunnelReady }, { startBridge }, { adminFetch }] = await Promise.all([
+  const [{ Workspace }, { findBridgeObservation }, { readTunnelState, isNamedTunnelReady }, { startBridge }, { adminFetch }, { SERVICE_NAME }] = await Promise.all([
     load('workspace/manager.js'),
     load('bridge/runtime.js'),
     load('tunnel/state.js'),
     load('bridge/server.js'),
     load('process/daemon.js'),
+    load('version.js'),
   ]);
 
   const workspace = new Workspace(c.workspace);
@@ -46,7 +47,7 @@ async function main() {
           redirect: 'error',
         });
         const body = response.ok ? await response.json() : null;
-        if (!body || body.status !== 'ok' || body.workspaceId !== workspace.id || !bridge.tunnel.status().running) {
+        if (!body || body.status !== 'ok' || body.service !== SERVICE_NAME || !bridge.tunnel.status().running) {
           throw new Error('HEALTH');
         }
         unhealthy = 0;
