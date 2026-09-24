@@ -1,125 +1,320 @@
-# Troubleshooting
+# トラブルシューティング
 
-First move, always:
+最初に実行する診断:
 
-```
-c2c doctor
-```
-
-It checks Node, workspace, bridge, MCP, OAuth and tunnel — and repairs what it
-can (restarts the bridge, restarts the tunnel) without asking.
-
-## Common situations
-
-### "Bridge 未运行"
-`c2c start` (or let doctor do it). Bridge logs:
-`c2c logs`, or verbose: `c2c logs --verbose`.
-
-If doctor says the bridge state is **uncertain** (无法确认), do not start a
-second bridge and do not Delete the ChatGPT connector. Wait and run doctor
-again. The local process may still be running.
-
-### Everything was quit and ChatGPT can no longer connect
-Quitting Codex / the terminal stops the public address. The next `c2c doctor`
-starts a new address and sets `chatgptRepair.needed`. The Skill should tell the
-user that the old address expired, then **Delete** THIS workspace's
-connector (`chatgptRepair.connectorName`) and create it again with the new
-address (never click Reconnect — the old URL is dead). Other workspaces keep
-their own connectors so two projects can stay connected at once.
-
-Mint the pairing code only when the ChatGPT Authorize form is on screen
-(`c2c pair`). After the connector is recreated, doctor being green is not
-enough: the saved ChatGPT conversation must pass `workspace_info` again. If
-that old chat still cannot read the workspace, open a new chat in the same
-Project (or switch long-chat) and continue there.
-
-Fixed ChatGPT pages for first-time setup and later repair (do not hunt the UI):
-
-- Developer mode: https://chatgpt.com/#settings/Security
-- Plugins hub (manage existing connectors): https://chatgpt.com/plugins
-- Add a connector:
-  https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2Fplugins
-
-### Tunnel URL unreachable / ChatGPT says the connector is broken
-Same as above: `c2c doctor`, then Delete + recreate THIS workspace's
-connector if `chatgptRepair.needed`. Mint a pairing code with `c2c pair` only
-when the Authorize form is on screen.
-If this workspace uses a stable hostname, doctor sets `namedRepair` instead —
-re-login to Cloudflare (`c2c tunnel login`) and doctor again. Do not Delete
-the connector; the address did not change.
-
-### I have a Cloudflare domain and want a stable hostname
-During first-time setup (or the next coding session, once), say you have a
-Cloudflare account and give the domain. Codex opens a browser for Cloudflare
-login, then keeps `c2c-<project>.your-domain.com`. To stay on the temporary
-address, say you do not have a domain. Switching later: tell Codex you want
-the stable hostname; it runs `c2c tunnel choose --mode named --zone <domain>`.
-
-### "配对码无效/过期"
-Pairing codes are one-time and expire after ~5 minutes. Generate one only
-when the ChatGPT Authorize page is ready:
-
-```
-c2c pair
+```bash
+c2c doctor -w /Volumes/ZAKKO_DEV/repos
 ```
 
-Older codes become invalid immediately. Do not mint a code during `c2c doctor`.
+## Bridgeが停止している
 
-### Temporary address keeps dropping on a UDP-filtered network
-cloudflared defaults to QUIC. If the tunnel reconnects over and over on a
-corporate network, set `C2C_TUNNEL_PROTOCOL=http2` and restart the bridge.
-Leave it unset to keep cloudflared's default.
+確認:
 
-### ChatGPT gets 401 on every tool call
-The access token expired and refresh failed (e.g. after `c2c unpair` or a
-long offline period). Delete THIS workspace's connector if the address also
-changed; otherwise run Authorize again in ChatGPT and enter a fresh pairing
-code. Never use Reconnect when the public address has been replaced.
-
-### cloudflared is not installed
-macOS: `brew install cloudflared`
-Windows: `winget install Cloudflare.cloudflared`
-Linux: see Cloudflare's package instructions.
-The Skill installs this automatically during setup.
-If cloudflared is installed in a custom location that is not on `PATH`, set
-`C2C_CLOUDFLARED_PATH` to the executable's absolute path before running `c2c`.
-
-### Every new Codex chat “repairs” the connection / cannot write logs
-The C2C state directory lives outside the project (macOS:
-`~/Library/Application Support/codex-with-chatgpt`; Windows:
-`%LOCALAPPDATA%\codex-with-chatgpt`). Codex's default sandbox cannot write
-there, so each new chat looks like a health-check failure.
-
-`c2c setup`, `c2c doctor` and `c2c sandbox-allow` add that directory to
-`[sandbox_workspace_write].writable_roots` in `~/.codex/config.toml`
-(`%USERPROFILE%\.codex\config.toml` on Windows). After that, later chats
-do not need elevation.
-
-### Port already in use
-Handled automatically: an existing healthy bridge for the same workspace is
-reused; anything else makes the bridge pick a free port. Configuration follows
-automatically.
-
-### Reading a file returns ACCESS_DENIED_SENSITIVE_FILE
-Working as intended: `.env`, keys, credentials and anything matched by
-`.c2cignore` are never readable through ChatGPT. `.env.example` is allowed.
-
-### I cannot see Projects in the ChatGPT sidebar
-Hover **Chats** /「聊天」, click the … that appears, and choose
-**Organize by project** /「按项目整理」. Then create a project named after
-this workspace, with **project-only memory**. Tell Codex「好了」when the
-collection page is open (`https://chatgpt.com/g/g-p-…/project`).
-
-### This workspace opened the wrong ChatGPT Project
-Do not pick another project by name automatically. Open the collection that
-matches this workspace and tell Codex「已找到」, or say you want the old
-long-chat instead. Each workspace has its own Project and its own connector.
-
-### Completely stuck
-```
-c2c stop
-c2c setup
+```bash
+c2c status -w /Volumes/ZAKKO_DEV/repos
 ```
 
-re-creates the bridge, tunnel and pairing session from scratch. Existing
-authorizations stay valid unless you also ran `c2c unpair`.
+起動:
+
+```bash
+c2c start -w /Volumes/ZAKKO_DEV/repos
+```
+
+ログ:
+
+```bash
+c2c logs -w /Volumes/ZAKKO_DEV/repos
+c2c logs -w /Volumes/ZAKKO_DEV/repos --verbose
+```
+
+Bridge状態が「確認不能」の場合は、別Bridgeを重複起動しません。
+
+保存済みPIDだけを根拠に別processを強制終了する処理も行いません。
+
+## ChatGPT Connectorへ接続できない
+
+主な確認対象:
+
+1. Bridgeが稼働しているか
+2. Named Tunnelが稼働しているか
+3. OAuth認証が有効か
+4. pairing codeが有効か
+5. ChatGPT側のConnector URLが現在のURLか
+
+診断:
+
+```bash
+c2c doctor -w /Volumes/ZAKKO_DEV/repos
+```
+
+固定ドメインの場合、URL自体を作り直す前にTunnel状態を確認します。
+
+## 固定ドメインへ接続できない
+
+状態:
+
+```bash
+c2c tunnel status -w /Volumes/ZAKKO_DEV/repos
+```
+
+Cloudflareへ再ログイン:
+
+```bash
+c2c tunnel login
+```
+
+固定ドメイン再設定:
+
+```bash
+c2c tunnel choose \
+  -w /Volumes/ZAKKO_DEV/repos \
+  --mode named \
+  --zone zakkolab.com \
+  --hostname c2c-mac-mini-control-center.zakkolab.com
+```
+
+Mac mini常駐サービスはNamed Tunnelを前提とします。
+
+## ペアリングコードが無効・期限切れ
+
+新しいコードを発行します。
+
+```bash
+c2c pair -w /Volumes/ZAKKO_DEV/repos
+```
+
+古いコードは使い回しません。
+
+コードはChatGPTの認証画面が表示されてから発行します。
+
+## 401が続く
+
+考えられる原因:
+
+- access token期限切れ
+- refresh失敗
+- `c2c unpair` 実行済み
+- ChatGPT Connector側の認証状態不整合
+
+必要に応じて再認証し、新しいpairing codeを使用します。
+
+## cloudflaredが見つからない
+
+macOS:
+
+```bash
+brew install cloudflared
+```
+
+確認:
+
+```bash
+which cloudflared
+cloudflared --version
+```
+
+PATH外へ置く場合は絶対パスを指定できます。
+
+```bash
+export C2C_CLOUDFLARED_PATH=/opt/homebrew/bin/cloudflared
+```
+
+## QUICが不安定
+
+企業ネットワーク等でUDPが制限されている場合:
+
+```bash
+export C2C_TUNNEL_PROTOCOL=http2
+```
+
+その後Bridgeを再起動します。
+
+未指定時はcloudflared既定動作を使用します。
+
+## ACCESS_DENIED_SENSITIVE_FILE
+
+これは基本的に正常な防御です。
+
+代表例:
+
+- `.env`
+- 秘密鍵
+- credentials
+- DBファイル
+- `.c2cignore` 対象
+
+`.env.example` は読み取り可能です。
+
+## Repository内のファイルが見えない
+
+対象Repositoryの `.c2cignore` を確認します。
+
+統合Workspaceでは、Repositoryごとの `.c2cignore` が適用されます。
+
+上位で拒否されたものを下位ルールで再公開できません。
+
+## Workspace外へアクセスできない
+
+仕様です。
+
+現在の共有範囲:
+
+```text
+/Volumes/ZAKKO_DEV/repos
+```
+
+次は共有対象外です。
+
+```text
+/Volumes/ZAKKO_DEV/data
+/Volumes/ZAKKO_DEV/docker
+/Volumes/ZAKKO_DEV/ollama
+/Volumes/ZAKKO_DEV/backups
+```
+
+必要な開発データはRepository側へ明示的に配置するか、別の安全な連携方式を設計します。
+
+## C2C_EGRESS_DENIED
+
+C2CのNode.js fetchが許可外URLへ通信しようとした場合に発生します。
+
+許可対象:
+
+- loopback
+- Named Tunnelの `/health`
+- Quick Tunnelの `/health`
+
+通常のGitHub APIや任意Web APIへC2C runtimeからfetchする処理は拒否します。
+
+明示的なGit操作やcloudflaredの通信は別経路です。
+
+## update-checkが更新を確認しない
+
+仕様です。
+
+```bash
+c2c update-check --json
+```
+
+は外部照会せず、
+
+```json
+{
+  "checked": false,
+  "updateAvailable": false,
+  "disabled": true
+}
+```
+
+相当を返します。
+
+更新は明示的にGitHub側の差分を確認してから行います。
+
+## Mac mini常駐サービスが起動しない
+
+構成確認:
+
+```bash
+pnpm mac:plan
+```
+
+確認対象:
+
+- `/Volumes/ZAKKO_DEV` がmount済み
+- Volume UUID一致
+- `/Volumes/ZAKKO_DEV/repos` のrealpath一致
+- C2C RepositoryがWorkspace内部
+- `dist/bridge/server.js` が存在
+- Named Tunnel設定済み
+- run.lockが異常状態で残っていない
+
+## WAIT_VOLUME
+
+外部ドライブ待機状態です。
+
+`ZAKKO_DEV` を接続してください。
+
+同名の別VolumeがmountされてもUUIDが違えば起動しません。
+
+## WAIT_BUILD
+
+build済み `dist/` が見つかりません。
+
+```bash
+corepack pnpm typecheck
+corepack pnpm test
+corepack pnpm build
+```
+
+を実行してください。
+
+## SERVICE_ALREADY_RUNNING
+
+常駐Supervisorがすでに動いています。
+
+二重起動しません。
+
+既存サービスの状態を確認してください。
+
+## SERVICE_LOCK_UNCERTAIN
+
+run.lockの所有状態を安全に確認できません。
+
+不明なlockを自動削除しない設計です。
+
+既存processを確認してから対応します。
+
+## 外部ドライブを抜いた
+
+Supervisorが検知するとworkerを停止し、Volume再接続待ちへ戻ります。
+
+Bridgeが外部Workspaceを開いたまま稼働し続けることを避けます。
+
+## LaunchAgentの状態確認
+
+```bash
+node scripts/macos-service.mjs status
+```
+
+停止:
+
+```bash
+node scripts/macos-service.mjs stop-agent
+```
+
+## LaunchDaemon
+
+ログアウト後も動かす構成はLaunchDaemonを使用します。
+
+生成:
+
+```bash
+node scripts/macos-service.mjs prepare
+```
+
+生成されたplistを確認後にsystemへ登録します。
+
+Repository側のスクリプトはroot操作を自動実行しません。
+
+## Port競合
+
+同じWorkspace用の正常なBridgeが存在すれば再利用します。
+
+別processが既定portを使用している場合、Bridgeは利用可能なportへfallbackします。
+
+## 完全に接続をやり直す
+
+必要な場合:
+
+```bash
+c2c stop -w /Volumes/ZAKKO_DEV/repos
+c2c setup -w /Volumes/ZAKKO_DEV/repos --tunnel
+```
+
+ChatGPTアクセスそのものを失効させる場合だけ:
+
+```bash
+c2c unpair -w /Volumes/ZAKKO_DEV/repos
+```
+
+`unpair` は既存tokenを失効させるため、通常の再起動では使用しません。
