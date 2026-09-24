@@ -593,6 +593,8 @@ C2C runtimeの外部HTTP fetchは許可先を限定する。
 
 公開healthへ秘密headerやCookieを転送しない。
 
+cloudflaredはCloudflare通信のため別経路で起動するが、親shellのAPIキー・GitHub token・`NODE_OPTIONS`等は子プロセスへ継承しない。
+
 `C2C_EGRESS_DENIED` が出た場合、安易に制限を解除しない。
 
 通信が本当に必要か確認し、設計として許可する場合のみレビューして変更する。
