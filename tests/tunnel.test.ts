@@ -142,7 +142,7 @@ describe("CloudflaredQuickTunnel", () => {
 
     child.stderr.write("ERR runtime connection error\n");
     await new Promise((resolve) => setImmediate(resolve));
-    expect(tunnel.status().detail).toBe("ERR runtime connection error");
+    expect(tunnel.status().detail).toBe("cloudflaredがエラーを報告しました");
     await tunnel.stop();
   });
 
