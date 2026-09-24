@@ -250,6 +250,12 @@ URL、query、header、bodyの内容は拒否エラーへ含めません。
 
 そのため、「元開発者へC2Cが任意データを自動送信しない」と「完全オフライン」は同義ではありません。
 
+## 子プロセス環境
+
+C2Cが起動するGit・ripgrep・cloudflared等の子プロセスには、親shellの環境変数をそのまま渡しません。
+
+OS実行に必要な値をallowlistで継承し、APIキー、GitHub token、Cloudflare API token、`NODE_OPTIONS`、Git注入用設定等は不要な子プロセスへ渡さない設計です。
+
 ## Process管理
 
 保存済みPIDだけを根拠に任意processへSIGTERMするフォールバックは使用しません。
