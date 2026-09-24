@@ -115,8 +115,8 @@ export class CloudflaredNamedTunnel implements TunnelProvider {
             finish(() => resolve(url));
           }
           if (/\b(error|failed|fatal)\b/i.test(line)) {
-            this.lastError = line.slice(0, 400);
-            this.logger.debug(`cloudflared: ${line.slice(0, 400)}`);
+            this.lastError = "cloudflaredがエラーを報告しました";
+            this.logger.debug(this.lastError);
           }
         });
       };
