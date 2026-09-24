@@ -4,7 +4,7 @@ import { IgnoreRules } from "./ignore.js";
 const GIT_ENV_KEYS = [
   "HOME", "USER", "LOGNAME", "PATH", "PATHEXT", "SYSTEMROOT", "SystemRoot", "WINDIR", "ComSpec",
   "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "APPDATA", "TEMP", "TMP", "TMPDIR",
-  "LANG", "LC_ALL", "TZ",
+  "LANG", "LC_ALL", "TZ", "GIT_CEILING_DIRECTORIES",
 ] as const;
 
 /** 読み取り専用Gitプロセスへshellの秘密情報やGit注入用環境変数を引き継がない。 */
