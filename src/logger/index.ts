@@ -64,7 +64,7 @@ export class Logger {
       try {
         if (fs.existsSync(this.file)) {
           const current = fs.lstatSync(this.file);
-          if (!current.isFile() || current.isSymbolicLink()) return;
+          if (!current.isFile() || current.isSymbolicLink()) throw new Error("LOG_PATH");
         }
         const noFollow = process.platform === "win32" ? 0 : fs.constants.O_NOFOLLOW;
         fd = fs.openSync(
@@ -72,7 +72,7 @@ export class Logger {
           fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | noFollow,
           0o600
         );
-        if (!fs.fstatSync(fd).isFile()) return;
+        if (!fs.fstatSync(fd).isFile()) throw new Error("LOG_PATH");
         try {
           fs.fchmodSync(fd, 0o600);
         } catch {
