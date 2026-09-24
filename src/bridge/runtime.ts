@@ -42,27 +42,54 @@ export function clearRuntimeState(workspaceId: string): void {
 
 export interface HealthPayload {
   service: string;
-  version: string;
-  workspaceId: string;
   status: string;
 }
 
-/** Probe a port and check whether a healthy c2c bridge for the workspace answers. */
+interface AdminProbePayload {
+  service: string;
+  workspaceId: string;
+}
+
+/** 公開healthの最小応答だけを確認する。Workspace識別には使用しない。 */
 export async function probeBridge(
   port: number,
   timeoutMs = 2000
 ): Promise<HealthPayload | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const response = await fetch(`http://127.0.0.1:${port}/health`, { signal: controller.signal });
-    clearTimeout(timer);
+    const response = await fetch(`http://127.0.0.1:${port}/health`, {
+      signal: controller.signal,
+      redirect: "error",
+    });
     if (!response.ok) return null;
     const body = (await response.json()) as HealthPayload;
-    if (body.service !== SERVICE_NAME) return null;
+    if (body.service !== SERVICE_NAME || body.status !== "ok") return null;
     return body;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function probeRuntime(runtime: RuntimeState, timeoutMs = 2000): Promise<AdminProbePayload | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`http://127.0.0.1:${runtime.port}/admin/info`, {
+      headers: { Authorization: `Bearer ${runtime.adminToken}` },
+      signal: controller.signal,
+      redirect: "error",
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as AdminProbePayload;
+    if (body.service !== SERVICE_NAME || typeof body.workspaceId !== "string") return null;
+    return body;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -89,11 +116,11 @@ export async function findBridgeObservation(workspaceId: string): Promise<Bridge
   const runtime = readRuntimeState(workspaceId);
   if (!runtime) return { state: "stopped", runtime: null, reason: "runtime_missing" };
 
-  const health = await probeBridge(runtime.port);
-  if (health && health.workspaceId === workspaceId) {
+  const admin = await probeRuntime(runtime);
+  if (admin && admin.workspaceId === workspaceId) {
     return { state: "healthy", runtime };
   }
-  if (health) {
+  if (admin) {
     return { state: "unknown", runtime, reason: "workspace_mismatch" };
   }
 
