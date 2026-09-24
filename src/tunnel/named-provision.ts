@@ -2,7 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { findBinary } from "./detect.js";
+import { cloudflaredEnvironment, findBinary } from "./detect.js";
 import { suggestedNamedHostname } from "./hostname.js";
 import { normalizeNamedTunnelHostname } from "./cloudflared-named.js";
 import {
@@ -101,7 +101,7 @@ export class ProcessCloudflaredAccount implements CloudflaredAccount {
     const bin = this.binary();
     await new Promise<void>((resolve, reject) => {
       // 明示的な対話ログインなのでCloudflareの案内はローカル端末へ直接表示し、C2Cでは保持しない。
-      const child = spawn(bin, ["tunnel", "login"], { stdio: "inherit", windowsHide: true });
+      const child = spawn(bin, ["tunnel", "login"], { stdio: "inherit", windowsHide: true, env: cloudflaredEnvironment() });
       const timer = setTimeout(() => {
         child.kill("SIGTERM");
         reject(new Error("Cloudflareログインがタイムアウトしました"));
@@ -160,6 +160,7 @@ export class ProcessCloudflaredAccount implements CloudflaredAccount {
       encoding: "utf8",
       timeout: COMMAND_TIMEOUT_MS,
       windowsHide: true,
+      env: cloudflaredEnvironment(),
     });
     return {
       ok: result.status === 0,
