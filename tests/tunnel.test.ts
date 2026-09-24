@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import type { ChildProcess } from "node:child_process";
 import { PassThrough } from "node:stream";
-import { findBinary } from "../src/tunnel/detect.js";
+import { cloudflaredEnvironment, findBinary } from "../src/tunnel/detect.js";
 import {
   CloudflaredQuickTunnel,
   parseQuickTunnelUrl,
@@ -68,6 +68,27 @@ afterEach(() => {
   else process.env.C2C_CLOUDFLARED_PATH = previousCloudflaredPath;
 });
 
+describe("cloudflaredEnvironment", () => {
+  it("OS設定だけを継承しAPIキーやGitHubトークンを除外する", () => {
+    const env = cloudflaredEnvironment({
+      HOME: "/Users/test",
+      PATH: "/usr/bin:/bin",
+      TUNNEL_ORIGIN_CERT: "/Users/test/.cloudflared/cert.pem",
+      OPENAI_API_KEY: "secret",
+      GITHUB_TOKEN: "secret",
+      CLOUDFLARE_API_TOKEN: "secret",
+      NODE_OPTIONS: "--require /tmp/evil.cjs",
+    });
+    expect(env.HOME).toBe("/Users/test");
+    expect(env.PATH).toBe("/usr/bin:/bin");
+    expect(env.TUNNEL_ORIGIN_CERT).toBe("/Users/test/.cloudflared/cert.pem");
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+    expect(env.GITHUB_TOKEN).toBeUndefined();
+    expect(env.CLOUDFLARE_API_TOKEN).toBeUndefined();
+    expect(env.NODE_OPTIONS).toBeUndefined();
+  });
+});
+
 describe("findBinary", () => {
   it("uses C2C_CLOUDFLARED_PATH for an accessible cloudflared executable", () => {
     const dir = makeTmpDir("cloudflared-path");
@@ -109,7 +130,7 @@ describe("CloudflaredQuickTunnel", () => {
     expect(spawnImpl).toHaveBeenCalledWith(
       "cloudflared",
       ["tunnel", "--url", "http://127.0.0.1:3333", "--no-autoupdate"],
-      { stdio: ["ignore", "pipe", "pipe"], windowsHide: true }
+      expect.objectContaining({ stdio: ["ignore", "pipe", "pipe"], windowsHide: true, env: expect.any(Object) })
     );
     expect(fetchImpl).toHaveBeenCalledWith(`${QUICK_URL}/health`, {
       redirect: "error",
@@ -128,7 +149,7 @@ describe("CloudflaredQuickTunnel", () => {
     expect(spawnImpl).toHaveBeenCalledWith(
       "cloudflared",
       ["tunnel", "--url", "http://127.0.0.1:3333", "--no-autoupdate", "--protocol", "http2"],
-      { stdio: ["ignore", "pipe", "pipe"], windowsHide: true }
+      expect.objectContaining({ stdio: ["ignore", "pipe", "pipe"], windowsHide: true, env: expect.any(Object) })
     );
     await tunnel.stop();
     vi.unstubAllEnvs();
