@@ -844,10 +844,10 @@ session
       if (saved.title) say(`会話：${saved.title}`);
       if (saved.url) say(`会話URL：${saved.url}`);
       if (saved.connectorName) say(`コネクター：${saved.connectorName}`);
-      if (saved.taskId) say(`タスク：${saved.taskId}（第 ${saved.iteration ?? 0} 轮，${saved.lastState ?? "?"}）`);
+      if (saved.taskId) say(`タスク：${saved.taskId}（第 ${saved.iteration ?? 0}回，${saved.lastState ?? "?"}）`);
       if (saved.checkpoint) {
         say(
-          `チェックポイント：${saved.checkpoint.protocolState} / 待機先 ${saved.checkpoint.waitingFor}（第 ${saved.checkpoint.iteration} 轮）`
+          `チェックポイント：${saved.checkpoint.protocolState} / 待機先 ${saved.checkpoint.waitingFor}（第 ${saved.checkpoint.iteration}回）`
         );
       }
     }
