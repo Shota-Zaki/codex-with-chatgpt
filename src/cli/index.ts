@@ -682,13 +682,13 @@ program
     }
     if (chatgptRepair.needed && chatgptRepair.userMessage) {
       say(chatgptRepair.userMessage);
-      if (chatgptRepair.mcpUrl) say(`新的接続先：${chatgptRepair.mcpUrl}`);
+      if (chatgptRepair.mcpUrl) say(`新しい接続先：${chatgptRepair.mcpUrl}`);
       if (chatgptRepair.pairingCode) say(`ペアリングコード：${chatgptRepair.pairingCode}`);
       say("");
     }
     say(
       allOk && !chatgptRepair.needed && !namedRepair.needed
-        ? "Everything looks good."
+        ? "問題は見つかりませんでした。"
         : chatgptRepair.needed
           ? "ローカル側は準備済みです。ChatGPT側の該当接続を更新してください。"
           : namedRepair.needed
