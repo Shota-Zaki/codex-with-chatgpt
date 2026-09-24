@@ -36,7 +36,10 @@ export function classifyRequest(request, hosts) {
   if (url.username || url.password || url.hash) return 'deny';
   const loopback = url.hostname === '127.0.0.1' || url.hostname === '[::1]';
   if (loopback && url.protocol === 'http:') return 'local';
-  if (url.protocol === 'https:' && !url.port && hosts.has(url.hostname)
+  const namedHealth = hosts.has(url.hostname);
+  const quickHealth = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.trycloudflare\.com$/i.test(url.hostname);
+  if (url.protocol === 'https:' && !url.port && (namedHealth || quickHealth)
+    && url.hostname.toLowerCase() !== 'api.trycloudflare.com'
     && url.pathname === '/health' && !url.search
     && (request.method === 'GET' || request.method === 'HEAD') && request.body === null) return 'health';
   return 'deny';
