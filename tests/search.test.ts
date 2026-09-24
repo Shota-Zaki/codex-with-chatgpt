@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { Workspace } from "../src/workspace/manager.js";
-import { searchWorkspace, resetRipgrepCache, findRipgrep } from "../src/workspace/search.js";
+import { searchEnvironment, searchWorkspace, resetRipgrepCache, findRipgrep } from "../src/workspace/search.js";
 import { makeTmpDir, cleanup, write } from "./helpers.js";
 
 let root: string;
@@ -29,6 +29,23 @@ afterAll(() => {
 afterEach(() => {
   delete process.env.C2C_DISABLE_RG;
   resetRipgrepCache();
+});
+
+describe("searchEnvironment", () => {
+  it("検索子プロセスへ秘密情報やNode注入設定を継承しない", () => {
+    const env = searchEnvironment({
+      HOME: "/Users/test",
+      PATH: "/usr/bin:/bin",
+      OPENAI_API_KEY: "secret",
+      GITHUB_TOKEN: "secret",
+      NODE_OPTIONS: "--require /tmp/evil.cjs",
+    });
+    expect(env.HOME).toBe("/Users/test");
+    expect(env.PATH).toBe("/usr/bin:/bin");
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+    expect(env.GITHUB_TOKEN).toBeUndefined();
+    expect(env.NODE_OPTIONS).toBeUndefined();
+  });
 });
 
 function engines(): ("ripgrep" | "node")[] {
