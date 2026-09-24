@@ -3,7 +3,7 @@ import readline from "node:readline";
 import type { Logger } from "../logger/index.js";
 import { nullLogger } from "../logger/index.js";
 import { SERVICE_NAME } from "../version.js";
-import { findBinary } from "./detect.js";
+import { cloudflaredEnvironment, findBinary } from "./detect.js";
 import type { TunnelDoctorReport, TunnelProvider, TunnelStatus } from "./provider.js";
 import { tunnelProtocolArgs } from "./protocol.js";
 
@@ -57,7 +57,7 @@ export interface CloudflaredQuickTunnelOptions {
   spawnImpl?: (
     command: string,
     args: string[],
-    options: { stdio: ["ignore", "pipe", "pipe"]; windowsHide: true }
+    options: { stdio: ["ignore", "pipe", "pipe"]; windowsHide: true; env: NodeJS.ProcessEnv }
   ) => ChildProcess;
   fetchImpl?: (input: string | URL, init?: RequestInit) => Promise<Response>;
 }
@@ -120,7 +120,7 @@ export class CloudflaredQuickTunnel implements TunnelProvider {
         child = this.spawnImpl(
           bin,
           ["tunnel", "--url", `http://127.0.0.1:${localPort}`, "--no-autoupdate", ...tunnelProtocolArgs()],
-          { stdio: ["ignore", "pipe", "pipe"], windowsHide: true }
+          { stdio: ["ignore", "pipe", "pipe"], windowsHide: true, env: cloudflaredEnvironment() }
         );
       } catch (error) {
         reject(error);
