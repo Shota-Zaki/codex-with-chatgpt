@@ -94,10 +94,10 @@ export class Workspace {
     try {
       real = fs.realpathSync.native(resolved);
     } catch {
-      throw new WorkspaceError("FILE_NOT_FOUND", `Workspace root does not exist: ${rootInput}`);
+      throw new WorkspaceError("FILE_NOT_FOUND", `Workspaceのルートが存在しません: ${rootInput}`);
     }
     if (!fs.statSync(real).isDirectory()) {
-      throw new WorkspaceError("NOT_A_DIRECTORY", `Workspace root is not a directory: ${rootInput}`);
+      throw new WorkspaceError("NOT_A_DIRECTORY", `Workspaceのルートがディレクトリではありません: ${rootInput}`);
     }
     this.root = real;
     this.id = createHash("sha256").update(normCase(real)).digest("hex").slice(0, 12);
@@ -138,7 +138,7 @@ export class Workspace {
    */
   resolve(requested: string, opts: { allowSensitive?: boolean } = {}): { abs: string; rel: string } {
     if (typeof requested !== "string" || requested.includes("\0")) {
-      throw new WorkspaceError("INVALID_PATH", "Invalid path");
+      throw new WorkspaceError("INVALID_PATH", "パスが無効です");
     }
     let p = requested.trim();
     if (p === "" || p === "/") p = ".";
@@ -153,17 +153,17 @@ export class Workspace {
     if (!this.contains(canonical)) {
       throw new WorkspaceError(
         "PATH_OUTSIDE_WORKSPACE",
-        `Path resolves outside the connected workspace: ${requested}`
+        `指定パスは接続中のWorkspace外を参照しています: ${requested}`
       );
     }
     const rel = path.relative(this.root, canonical).split(path.sep).join("/");
     if (rel.startsWith("..")) {
-      throw new WorkspaceError("PATH_OUTSIDE_WORKSPACE", `Path resolves outside the connected workspace: ${requested}`);
+      throw new WorkspaceError("PATH_OUTSIDE_WORKSPACE", `指定パスは接続中のWorkspace外を参照しています: ${requested}`);
     }
     if (!opts.allowSensitive && rel !== "" && this.ignoreRules.isSensitive(rel)) {
       throw new WorkspaceError(
         "ACCESS_DENIED_SENSITIVE_FILE",
-        `ACCESS_DENIED_SENSITIVE_FILE: '${rel}' matches the sensitive-file policy and cannot be read.`
+        `ACCESS_DENIED_SENSITIVE_FILE: '${rel}' は機密ファイル規則に一致するため読み取れません。`
       );
     }
     return { abs: canonical, rel };
@@ -192,13 +192,13 @@ export class Workspace {
     try {
       stat = await fs.promises.stat(abs);
     } catch {
-      throw new WorkspaceError("FILE_NOT_FOUND", `File not found: ${rel}`);
+      throw new WorkspaceError("FILE_NOT_FOUND", `ファイルが見つかりません: ${rel}`);
     }
     if (!stat.isFile()) {
-      throw new WorkspaceError("NOT_A_FILE", `Not a regular file: ${rel}`);
+      throw new WorkspaceError("NOT_A_FILE", `通常ファイルではありません: ${rel}`);
     }
     if (await this.isBinary(abs)) {
-      throw new WorkspaceError("BINARY_FILE", `Binary file (${stat.size} bytes): ${rel}. Content is not returned.`);
+      throw new WorkspaceError("BINARY_FILE", `バイナリファイルです（${stat.size} bytes）: ${rel}。内容は返しません。`);
     }
 
     const startLine = Math.max(1, Math.floor(opts.startLine ?? 1));
@@ -254,10 +254,10 @@ export class Workspace {
     try {
       stat = await fs.promises.stat(abs);
     } catch {
-      throw new WorkspaceError("FILE_NOT_FOUND", `Directory not found: ${rel || "."}`);
+      throw new WorkspaceError("FILE_NOT_FOUND", `ディレクトリが見つかりません: ${rel || "."}`);
     }
     if (!stat.isDirectory()) {
-      throw new WorkspaceError("NOT_A_DIRECTORY", `Not a directory: ${rel}`);
+      throw new WorkspaceError("NOT_A_DIRECTORY", `ディレクトリではありません: ${rel}`);
     }
     const depth = Math.min(4, Math.max(1, Math.floor(opts.depth ?? 1)));
     const limit = Math.min(1000, Math.max(1, Math.floor(opts.limit ?? 200)));
