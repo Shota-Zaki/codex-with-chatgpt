@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import readline from "node:readline";
 import type { Logger } from "../logger/index.js";
 import { nullLogger } from "../logger/index.js";
-import { findBinary } from "./detect.js";
+import { cloudflaredEnvironment, findBinary } from "./detect.js";
 import { tunnelProtocolArgs } from "./protocol.js";
 import type { TunnelDoctorReport, TunnelProvider, TunnelStatus } from "./provider.js";
 
@@ -84,7 +84,7 @@ export class CloudflaredNamedTunnel implements TunnelProvider {
           "run",
           this.tunnelName,
         ],
-        { stdio: ["ignore", "pipe", "pipe"], windowsHide: true }
+        { stdio: ["ignore", "pipe", "pipe"], windowsHide: true, env: cloudflaredEnvironment() }
       );
       this.child = child;
       this.connected = false;
