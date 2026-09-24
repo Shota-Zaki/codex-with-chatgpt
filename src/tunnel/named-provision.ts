@@ -86,7 +86,7 @@ export class ProcessCloudflaredAccount implements CloudflaredAccount {
     const bin = this.binaryOverride ?? findBinary("cloudflared");
     if (!bin) {
       throw new Error(
-        "NEED_CLOUDFLARED: cloudflared is not installed. Install it first (macOS: brew install cloudflared)."
+        "NEED_CLOUDFLARED: cloudflaredがインストールされていません。先に導入してください（macOS: brew install cloudflared）。"
       );
     }
     return bin;
@@ -109,7 +109,7 @@ export class ProcessCloudflaredAccount implements CloudflaredAccount {
       child.stderr?.on("data", collect);
       const timer = setTimeout(() => {
         child.kill("SIGTERM");
-        reject(new Error("Cloudflare login timed out"));
+        reject(new Error("Cloudflareログインがタイムアウトしました"));
       }, LOGIN_TIMEOUT_MS);
       child.on("error", (error) => {
         clearTimeout(timer);
@@ -123,7 +123,7 @@ export class ProcessCloudflaredAccount implements CloudflaredAccount {
         }
         reject(
           new Error(
-            `Cloudflare login did not finish${code !== 0 ? ` (exit ${code})` : ""}${
+            `Cloudflareログインを完了できませんでした${code !== 0 ? ` (exit ${code})` : ""}${
               output.trim() ? `: ${output.trim().slice(0, 400)}` : ""
             }`
           )
@@ -139,7 +139,7 @@ export class ProcessCloudflaredAccount implements CloudflaredAccount {
       if (parsed.length > 0 || (json.stdout || json.stderr).trim().startsWith("[")) return parsed;
     }
     const table = this.run(["tunnel", "list"]);
-    if (!table.ok) throw new Error(table.stderr || table.stdout || "Unable to list Cloudflare tunnels");
+    if (!table.ok) throw new Error(table.stderr || table.stdout || "Cloudflare Tunnelの一覧を取得できません");
     return parseTunnelList(`${table.stdout}\n${table.stderr}`);
   }
 
@@ -153,13 +153,13 @@ export class ProcessCloudflaredAccount implements CloudflaredAccount {
       const again = (await this.listTunnels()).find((tunnel) => tunnel.name === name);
       if (again) return again;
     }
-    throw new Error(result.stderr || result.stdout || `Unable to create tunnel ${name}`);
+    throw new Error(result.stderr || result.stdout || `Tunnel ${name} を作成できません`);
   }
 
   async routeDns(tunnelName: string, hostname: string): Promise<void> {
     const result = this.run(["tunnel", "route", "dns", tunnelName, hostname]);
     if (result.ok || isBenignRouteError(`${result.stdout}\n${result.stderr}`)) return;
-    throw new Error(result.stderr || result.stdout || `Unable to route ${hostname}`);
+    throw new Error(result.stderr || result.stdout || `${hostname} のDNSルートを設定できません`);
   }
 
   private run(args: string[]): { ok: boolean; stdout: string; stderr: string } {
