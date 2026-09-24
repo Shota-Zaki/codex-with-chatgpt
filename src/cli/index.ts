@@ -411,7 +411,7 @@ program
     say("");
     check(`Workspace：${info.workspaceName}`);
     check(`Bridge：稼働中（ポート ${info.port}）`);
-    if (info.tunnel.running && info.tunnel.url) check(`安全连接：${info.tunnel.url}/mcp`);
+    if (info.tunnel.running && info.tunnel.url) check(`安全な接続：${info.tunnel.url}/mcp`);
     else say("· 安全な接続：未使用（ローカルモード）");
     say(`· 認証済み接続：${info.tokenCount > 0 ? "あり" : "なし"}`);
   });
@@ -714,7 +714,7 @@ program
       if (opts.json) say(JSON.stringify({ ok: true, pairingCode: pairing.code, expiresAt: pairing.expiresAt }));
       else {
         say(`ペアリングコード：${pairing.code}`);
-        say(`（${Math.round((pairing.expiresAt - Date.now()) / 60000)}分間有効，仅可使用一次）`);
+        say(`（${Math.round((pairing.expiresAt - Date.now()) / 60000)}分間有効・1回のみ使用可能）`);
       }
     } catch (error) {
       handleCliError(error, opts.json);
@@ -896,7 +896,7 @@ session
       const workspace = new Workspace(resolveWorkspace(opts.workspace));
       const modeRaw = opts.mode?.trim().toLowerCase();
       if (modeRaw && modeRaw !== "long-chat" && modeRaw !== "project") {
-        throw new Error("mode must be long-chat または project");
+        throw new Error("modeにはlong-chatまたはprojectを指定してください");
       }
       const protocolRaw = opts.protocolState?.trim().toUpperCase();
       if (protocolRaw && !PROTOCOL_STATES.includes(protocolRaw as ProtocolState)) {
@@ -969,7 +969,7 @@ acceptUnusedWorkspaceOption(
       say(JSON.stringify({ ok: true, ...prefs }));
       return;
     }
-    say(prefs.developerModeEnabled ? "开发人员モード：已记住已开启" : "开发人员モード：尚未记住");
+    say(prefs.developerModeEnabled ? "開発者モード：有効確認済み" : "開発者モード：未確認");
     if (prefs.setupMode === "auto") say("設定方式：AIによる自動設定（プレビュー）");
     else if (prefs.setupMode === "manual") say("設定方式：手動ガイド設定");
     else say("設定方式：未選択");
@@ -1001,8 +1001,8 @@ acceptUnusedWorkspaceOption(
         return;
       }
       if (opts.developerMode) check("開発者モードを有効確認済みとして保存しました");
-      if (modeRaw === "auto") check("已记住設定方式：AIによる自動設定（プレビュー）");
-      if (modeRaw === "manual") check("已记住設定方式：手動ガイド設定");
+      if (modeRaw === "auto") check("設定方式「AIによる自動設定（プレビュー）」を保存しました");
+      if (modeRaw === "manual") check("設定方式「手動ガイド設定」を保存しました");
     } catch (error) {
       handleCliError(error, opts.json);
     }
@@ -1121,7 +1121,7 @@ tunnelCmd
         return;
       }
       if (mode !== "named") {
-        throw new Error("mode must be quick または named");
+        throw new Error("modeにはquickまたはnamedを指定してください");
       }
       const zone = parseZoneInput(opts.zone ?? "");
       if (!zone) {
