@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ensureDir, getStateDir } from "../config/paths.js";
-import { findBridgeObservation, findLiveBridge, probeBridge, readRuntimeState, type RuntimeState } from "../bridge/runtime.js";
+import { findBridgeObservation, findLiveBridge, readRuntimeState, type RuntimeState } from "../bridge/runtime.js";
 import { Workspace } from "../workspace/manager.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -102,8 +102,8 @@ export async function stopBridge(workspaceRoot: string): Promise<boolean> {
   const runtime = readRuntimeState(workspace.id);
   if (!runtime) return false;
 
-  const healthy = await probeBridge(runtime.port);
-  if (healthy && healthy.workspaceId === workspace.id) {
+  const observation = await findBridgeObservation(workspace.id);
+  if (observation.state === "healthy") {
     try {
       await adminFetch(runtime, "POST", "/admin/shutdown", 5000);
       return true;
