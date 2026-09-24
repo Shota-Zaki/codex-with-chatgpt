@@ -72,16 +72,16 @@ function resolveWorkspace(option?: string): string {
 function parseInteger(value: string): number {
   const normalized = value.trim();
   if (!/^-?\d+$/.test(normalized)) {
-    throw new InvalidArgumentError("must be an integer");
+    throw new InvalidArgumentError("整数を指定してください");
   }
   const parsed = Number(normalized);
-  if (!Number.isSafeInteger(parsed)) throw new InvalidArgumentError("must be a safe integer");
+  if (!Number.isSafeInteger(parsed)) throw new InvalidArgumentError("安全な範囲の整数を指定してください");
   return parsed;
 }
 
 function parseNonNegativeInteger(value: string): number {
   const parsed = parseInteger(value);
-  if (parsed < 0) throw new InvalidArgumentError("must be a non-negative integer");
+  if (parsed < 0) throw new InvalidArgumentError("0以上の整数を指定してください");
   return parsed;
 }
 
@@ -90,7 +90,7 @@ function parseChangedFiles(value: string): string[] | number {
   if (/^-?\d+$/.test(normalized)) {
     const count = parseInteger(normalized);
     if (count < 0) {
-      throw new InvalidArgumentError("changed-files count must be a non-negative safe integer");
+      throw new InvalidArgumentError("changed-filesの件数には0以上の安全な範囲の整数を指定してください");
     }
     return count;
   }
@@ -200,11 +200,11 @@ async function ensureBridgeAndTunnel(
     const binaries = detectTunnelBinaries();
     if (!binaries.cloudflared) {
       throw new Error(
-        "NEED_CLOUDFLARED: cloudflared is not installed. Install it first (macOS: brew install cloudflared)."
+        "NEED_CLOUDFLARED: cloudflaredがインストールされていません。先に導入してください（macOS: brew install cloudflared）。"
       );
     }
     const result = await adminFetch<TunnelStartResponse>(runtime, "POST", "/admin/tunnel/start", 90_000);
-    if (!result.url) throw new Error(result.message ?? "Tunnel start failed");
+    if (!result.url) throw new Error(result.message ?? "トンネルの起動に失敗しました");
     info = await adminFetch<AdminInfo>(runtime, "GET", "/admin/info");
     mcpUrl = `${result.url}/mcp`;
   }
@@ -213,22 +213,22 @@ async function ensureBridgeAndTunnel(
 
 program
   .name("c2c")
-  .description(`${PRODUCT_NAME} — ChatGPT thinks. Codex works.`)
+  .description(`${PRODUCT_NAME} — ChatGPTが考え、Codexが実行します。`)
   .version(VERSION, "-v, --version")
   .configureHelp({ sortSubcommands: true });
 
 /** Machine-wide commands ignore `-w` so a Skill that always passes it cannot crash them. */
 function acceptUnusedWorkspaceOption(command: Command): Command {
-  return command.option("-w, --workspace <path>", "ignored; this command is machine-wide");
+  return command.option("-w, --workspace <path>", "このコマンドは端末全体が対象のためworkspace指定は使用しません");
 }
 
 // ---------------------------------------------------------------- serve (internal)
 
 program
   .command("serve", { hidden: true })
-  .description("Run the bridge in the foreground (internal)")
+  .description("Bridgeをフォアグラウンドで起動します（内部用）")
   .requiredOption("--workspace <path>")
-  .option("--port <port>", "preferred port")
+  .option("--port <port>", "優先して使用するポート")
   .action(async (opts: { workspace: string; port?: string }) => {
     const logger = new Logger({ name: "bridge", console: true });
     const bridge = await startBridge({
@@ -241,17 +241,17 @@ program
     };
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
-    say(`bridge ready on ${bridge.localBaseUrl()} (workspace ${bridge.workspace.name})`);
+    say(`Bridgeを起動しました：${bridge.localBaseUrl()}（Workspace ${bridge.workspace.name}）`);
   });
 
 // ---------------------------------------------------------------- start
 
 program
   .command("start")
-  .description("Start (or reuse) the bridge for this workspace")
-  .option("-w, --workspace <path>", "workspace root (defaults to current directory)")
-  .option("--tunnel", "also establish the secure public connection", false)
-  .option("--json", "machine-readable output", false)
+  .description("このWorkspaceのBridgeを起動または再利用します")
+  .option("-w, --workspace <path>", "Workspaceのルート（省略時は現在のディレクトリ）")
+  .option("--tunnel", "安全な公開接続も確立します", false)
+  .option("--json", "機械処理用JSONを出力します", false)
   .action(async (opts: { workspace?: string; tunnel: boolean; json: boolean }) => {
     const root = resolveWorkspace(opts.workspace);
     try {
@@ -269,9 +269,9 @@ program
         say(JSON.stringify({ ok: true, port: runtime.port, workspaceId: info.workspaceId, mcpUrl, connectorName }));
         return;
       }
-      check(`当前项目已识别（${info.workspaceName}）`);
-      check("Workspace Bridge 已启动");
-      if (mcpUrl) check("安全连接已建立");
+      check(`現在のWorkspaceを確認しました（${info.workspaceName}）`);
+      check("Workspace Bridgeを起動しました");
+      if (mcpUrl) check("安全な接続を確立しました");
     } catch (error) {
       handleCliError(error, opts.json);
     }
@@ -281,17 +281,17 @@ program
 
 program
   .command("setup")
-  .description("First-time setup: bridge + secure connection + pairing code")
+  .description("初回設定：Bridge・安全な接続・ペアリングコードを準備します")
   .option("-w, --workspace <path>")
-  .option("--no-tunnel", "local-only setup (development)")
-  .option("--json", "machine-readable output", false)
+  .option("--no-tunnel", "ローカルのみで設定します（開発用）")
+  .option("--json", "機械処理用JSONを出力します", false)
   .action(async (opts: { workspace?: string; tunnel: boolean; json: boolean }) => {
     const root = resolveWorkspace(opts.workspace);
     try {
       if (!opts.json) {
         say(PRODUCT_NAME);
         say("");
-        say("正在连接 ChatGPT…");
+        say("ChatGPTへ接続しています…");
         say("");
       }
       const sandbox = trySandboxAllow();
@@ -333,15 +333,15 @@ program
         );
         return;
       }
-      check(`当前项目已识别（${info.workspaceName}）`);
-      check("Workspace Bridge 已启动");
-      if (mcpUrl) check("安全连接已建立");
+      check(`現在のWorkspaceを確認しました（${info.workspaceName}）`);
+      check("Workspace Bridgeを起動しました");
+      if (mcpUrl) check("安全な接続を確立しました");
       say("");
-      say(`连接地址：${mcpUrl ?? `http://127.0.0.1:${runtime.port}/mcp`}`);
-      say(`配对码：${pairingResult.code}（${Math.round((pairingResult.expiresAt - Date.now()) / 60000)} 分钟内有效）`);
+      say(`接続先：${mcpUrl ?? `http://127.0.0.1:${runtime.port}/mcp`}`);
+      say(`ペアリングコード：${pairingResult.code}（${Math.round((pairingResult.expiresAt - Date.now()) / 60000)}分間有効）`);
       say("");
-      say("下一步：在 ChatGPT 的连接器设置中添加以上地址（OAuth），并在授权页输入配对码。");
-      say("如果你在使用 Codex Skill，这一步会自动完成。");
+      say("次にChatGPTのコネクター設定へ上記接続先を追加し、OAuth認証画面でペアリングコードを入力してください。");
+      say("Codex Skillを使用している場合、この手順は自動で進みます。");
     } catch (error) {
       handleCliError(error, opts.json);
     }
@@ -351,27 +351,27 @@ program
 
 program
   .command("stop")
-  .description("Stop the bridge for this workspace")
+  .description("このWorkspaceのBridgeを停止します")
   .option("-w, --workspace <path>")
   .action(async (opts: { workspace?: string }) => {
     const stopped = await stopBridge(resolveWorkspace(opts.workspace));
-    if (stopped) check("Bridge 已停止");
-    else say("没有正在运行的 Bridge。");
+    if (stopped) check("Bridgeを停止しました");
+    else say("実行中のBridgeはありません。");
   });
 
 program
   .command("restart")
-  .description("Restart the bridge for this workspace")
+  .description("このWorkspaceのBridgeを再起動します")
   .option("-w, --workspace <path>")
-  .option("--tunnel", "re-establish the secure public connection", false)
+  .option("--tunnel", "安全な公開接続も再確立します", false)
   .action(async (opts: { workspace?: string; tunnel: boolean }) => {
     const root = resolveWorkspace(opts.workspace);
     await stopBridge(root);
     await new Promise((resolve) => setTimeout(resolve, 500));
     try {
       const { info, mcpUrl } = await ensureBridgeAndTunnel(root, { tunnel: opts.tunnel });
-      check(`Bridge 已重启（${info.workspaceName}）`);
-      if (mcpUrl) check(`安全连接已建立`);
+      check(`Bridgeを再起動しました（${info.workspaceName}）`);
+      if (mcpUrl) check(`安全な接続を確立しました`);
     } catch (error) {
       handleCliError(error, false);
     }
@@ -381,9 +381,9 @@ program
 
 program
   .command("status")
-  .description("Show bridge status for this workspace")
+  .description("このWorkspaceのBridge状態を表示します")
   .option("-w, --workspace <path>")
-  .option("--json", "machine-readable output", false)
+  .option("--json", "機械処理用JSONを出力します", false)
   .action(async (opts: { workspace?: string; json: boolean }) => {
     const root = resolveWorkspace(opts.workspace);
     const workspace = new Workspace(root);
@@ -392,13 +392,13 @@ program
       if (opts.json) {
         say(JSON.stringify({ ok: false, running: null, state: "unknown", reason: observation.reason }));
       } else {
-        cross(`Bridge 状态无法确认（${observation.reason}），未将其视为未运行。`);
+        cross(`Bridgeの状態を確認できません（${observation.reason}）。停止中とは判定しません。`);
       }
       return;
     }
     if (observation.state === "stopped") {
       if (opts.json) say(JSON.stringify({ ok: false, running: false }));
-      else say("Bridge 未运行。使用 `c2c start` 启动。");
+      else say("Bridgeは停止しています。`c2c start`で起動できます。");
       return;
     }
     const runtime = observation.runtime;
@@ -410,20 +410,20 @@ program
     say(PRODUCT_NAME);
     say("");
     check(`Workspace：${info.workspaceName}`);
-    check(`Bridge：运行中（端口 ${info.port}）`);
+    check(`Bridge：稼働中（ポート ${info.port}）`);
     if (info.tunnel.running && info.tunnel.url) check(`安全连接：${info.tunnel.url}/mcp`);
-    else say("· 安全连接：未启用（本地模式）");
-    say(`· 已授权连接：${info.tokenCount > 0 ? "是" : "否"}`);
+    else say("· 安全な接続：未使用（ローカルモード）");
+    say(`· 認証済み接続：${info.tokenCount > 0 ? "あり" : "なし"}`);
   });
 
 // ---------------------------------------------------------------- doctor
 
 program
   .command("doctor")
-  .description("Diagnose and auto-repair the connection")
+  .description("接続状態を診断し、可能な範囲を自動修復します")
   .option("-w, --workspace <path>")
-  .option("--no-fix", "diagnose only, do not repair")
-  .option("--json", "machine-readable output", false)
+  .option("--no-fix", "診断のみ実行し、修復しません")
+  .option("--json", "機械処理用JSONを出力します", false)
   .action(async (opts: { workspace?: string; fix: boolean; json: boolean }) => {
     const root = resolveWorkspace(opts.workspace);
     const report: Record<string, { ok: boolean; detail?: string }> = {};
@@ -437,8 +437,8 @@ program
     if (opts.fix) {
       const sandbox = trySandboxAllow();
       if (sandbox.ok) {
-        report.sandbox = { ok: true, detail: sandbox.alreadyAllowed ? "已在白名单" : "已写入白名单" };
-        if (sandbox.added) results.push("已将本地设置目录加入 Codex 沙箱白名单");
+        report.sandbox = { ok: true, detail: sandbox.alreadyAllowed ? "許可済み" : "許可設定へ追加済み" };
+        if (sandbox.added) results.push("ローカル設定ディレクトリをCodexサンドボックスの許可設定へ追加しました");
       } else {
         report.sandbox = { ok: false, detail: sandbox.error };
       }
@@ -447,7 +447,7 @@ program
         const configPath = getCodexConfigPath();
         const allowed =
           fs.existsSync(configPath) && isStateDirAllowlisted(fs.readFileSync(configPath, "utf8"), getStateDir());
-        report.sandbox = allowed ? { ok: true, detail: "已在白名单" } : { ok: false, detail: "未在白名单" };
+        report.sandbox = allowed ? { ok: true, detail: "許可済み" } : { ok: false, detail: "未許可" };
       } catch (error) {
         report.sandbox = { ok: false, detail: (error as Error).message };
       }
@@ -471,17 +471,17 @@ program
         runtime = observation.runtime;
       } else if (observation.state === "unknown") {
         bridgeUnknown = true;
-        report.bridge = { ok: false, detail: `状态无法确认（${observation.reason}），未自动修复` };
+        report.bridge = { ok: false, detail: `状態を確認できません（${observation.reason}）。自動修復は行っていません` };
       } else if (opts.fix) {
         try {
           runtime = (await ensureBridge(root)).runtime;
-          results.push("已自动启动 Bridge");
+          results.push("Bridgeを自動起動しました");
         } catch (error) {
           report.bridge = { ok: false, detail: (error as Error).message };
         }
       }
       if (runtime) report.bridge = { ok: true, detail: `端口 ${runtime.port}` };
-      else report.bridge = report.bridge ?? { ok: false, detail: "未运行" };
+      else report.bridge = report.bridge ?? { ok: false, detail: "停止中" };
     }
 
     // MCP local reachability (401 without token means MCP + auth both work)
@@ -492,7 +492,7 @@ program
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ jsonrpc: "2.0", method: "ping", id: 1 }),
         });
-        report.mcp = { ok: response.status === 401, detail: `未授权请求返回 ${response.status}` };
+        report.mcp = { ok: response.status === 401, detail: `未認証要求の応答：${response.status}` };
         report.oauth = { ok: response.status === 401 };
       } catch (error) {
         report.mcp = { ok: false, detail: (error as Error).message };
@@ -550,7 +550,7 @@ program
         try {
           runtime = (await ensureBridge(root)).runtime;
           info = await adminFetch<AdminInfo>(runtime, "GET", "/admin/info");
-          results.push("已切换到固定域名连接");
+          results.push("固定ドメイン接続へ切り替えました");
         } catch (error) {
           report.tunnel = { ok: false, detail: (error as Error).message };
         }
@@ -581,7 +581,7 @@ program
               info = await adminFetch<AdminInfo>(runtime, "GET", "/admin/info");
               const sameAddress =
                 previousUrl && normalizePublicUrl(previousUrl) === normalizePublicUrl(started.url);
-              results.push(sameAddress ? "已重新建立安全连接" : "已重新建立安全连接（地址已更换）");
+              results.push(sameAddress ? "安全な接続を再確立しました" : "安全な接続を再確立しました（接続先変更あり）");
             }
           }
         } catch (error) {
@@ -614,13 +614,13 @@ program
           previousMcpUrl: lastEndpoint?.mcpUrl ?? null,
         };
         if (action === "update") {
-          results.push(`安全连接地址已更换，需要更新「${boundName}」`);
+          results.push(`安全な接続先が変更されたため「${boundName}」の更新が必要です`);
         }
       } else if (namedReady) {
         report.tunnel = report.tunnel ?? { ok: false, detail: "NAMED_TUNNEL_DOWN" };
         namedRepair = { needed: true, userMessage: NAMED_REPAIR_MESSAGE };
       } else if (expectedPublic) {
-        report.tunnel = report.tunnel ?? { ok: false, detail: "安全连接未恢复" };
+        report.tunnel = report.tunnel ?? { ok: false, detail: "安全な接続を復旧できません" };
         chatgptRepair = {
           ...chatgptRepair,
           needed: true,
@@ -631,17 +631,17 @@ program
           mcpUrl: null,
         };
       } else if (!currentUrl) {
-        report.tunnel = { ok: true, detail: "未启用（本地模式）" };
+        report.tunnel = { ok: true, detail: "未使用（ローカルモード）" };
       } else {
-        report.tunnel = { ok: false, detail: "公网地址无法访问" };
+        report.tunnel = { ok: false, detail: "公開接続先へ到達できません" };
       }
     } else if (bridgeUnknown) {
-      report.tunnel = report.tunnel ?? { ok: false, detail: "Bridge 状态无法确认，未执行连接器修复" };
+      report.tunnel = report.tunnel ?? { ok: false, detail: "Bridgeの状態を確認できないためコネクター修復を実行していません" };
     } else if (namedReady) {
       report.tunnel = { ok: false, detail: "NAMED_TUNNEL_DOWN" };
       namedRepair = { needed: true, userMessage: NAMED_REPAIR_MESSAGE };
     } else if (lastEndpoint?.publicUrl) {
-      report.tunnel = { ok: false, detail: "安全连接未运行" };
+      report.tunnel = { ok: false, detail: "安全な接続は停止中です" };
       chatgptRepair = {
         ...chatgptRepair,
         needed: true,
@@ -656,7 +656,7 @@ program
       say(JSON.stringify({ report, repairs: results, chatgptRepair, namedRepair }));
       return;
     }
-    say(`${PRODUCT_NAME} Doctor`);
+    say(`${PRODUCT_NAME} 診断`);
     say("");
     const labels: Record<string, string> = {
       node: "Node.js",
@@ -684,18 +684,18 @@ program
     }
     if (chatgptRepair.needed && chatgptRepair.userMessage) {
       say(chatgptRepair.userMessage);
-      if (chatgptRepair.mcpUrl) say(`新的连接地址：${chatgptRepair.mcpUrl}`);
-      if (chatgptRepair.pairingCode) say(`配对码：${chatgptRepair.pairingCode}`);
+      if (chatgptRepair.mcpUrl) say(`新的接続先：${chatgptRepair.mcpUrl}`);
+      if (chatgptRepair.pairingCode) say(`ペアリングコード：${chatgptRepair.pairingCode}`);
       say("");
     }
     say(
       allOk && !chatgptRepair.needed && !namedRepair.needed
         ? "Everything looks good."
         : chatgptRepair.needed
-          ? "本地已就绪，还需要在 ChatGPT 删除并重新添加该连接。"
+          ? "ローカル側は準備済みです。ChatGPT側の該当接続を更新してください。"
           : namedRepair.needed
-            ? "固定域名还没连上，需要先登录 Cloudflare。"
-            : "仍有问题未解决，可尝试 `c2c restart --tunnel`。"
+            ? "固定ドメインへ接続できていません。Cloudflareのログイン状態を確認してください。"
+            : "未解決の問題があります。`c2c restart --tunnel`を実行してください。"
     );
     if (!allOk || namedRepair.needed) process.exitCode = 1;
   });
@@ -704,17 +704,17 @@ program
 
 program
   .command("pair")
-  .description("Generate a fresh pairing code")
+  .description("新しいペアリングコードを発行します")
   .option("-w, --workspace <path>")
-  .option("--json", "machine-readable output", false)
+  .option("--json", "機械処理用JSONを出力します", false)
   .action(async (opts: { workspace?: string; json: boolean }) => {
     try {
       const { runtime } = await ensureBridge(resolveWorkspace(opts.workspace));
       const pairing = await adminFetch<PairingResponse>(runtime, "POST", "/admin/pairing");
       if (opts.json) say(JSON.stringify({ ok: true, pairingCode: pairing.code, expiresAt: pairing.expiresAt }));
       else {
-        say(`配对码：${pairing.code}`);
-        say(`（${Math.round((pairing.expiresAt - Date.now()) / 60000)} 分钟内有效，仅可使用一次）`);
+        say(`ペアリングコード：${pairing.code}`);
+        say(`（${Math.round((pairing.expiresAt - Date.now()) / 60000)}分間有効，仅可使用一次）`);
       }
     } catch (error) {
       handleCliError(error, opts.json);
@@ -723,7 +723,7 @@ program
 
 program
   .command("unpair")
-  .description("Revoke ChatGPT's access to this workspace immediately")
+  .description("このWorkspaceへのChatGPTアクセスを直ちに無効化します")
   .option("-w, --workspace <path>")
   .action(async (opts: { workspace?: string }) => {
     const root = resolveWorkspace(opts.workspace);
@@ -735,17 +735,17 @@ program
       // bridge not running: revoke directly in the persisted store
       new AuthStore(workspace.id).revokeAll();
     }
-    check("已断开 ChatGPT 对当前项目的访问（所有令牌已吊销）");
+    check("このWorkspaceへのChatGPTアクセスを無効化しました（全トークン失効済み）");
   });
 
 // ---------------------------------------------------------------- logs / workspace / record
 
 program
   .command("logs")
-  .description("Show recent bridge logs")
+  .description("最近のBridgeログを表示します")
   .option("-w, --workspace <path>")
-  .option("-n, --lines <n>", "number of lines", "50")
-  .option("--verbose", "include debug detail", false)
+  .option("-n, --lines <n>", "表示する行数", "50")
+  .option("--verbose", "デバッグ詳細を含めます", false)
   .action((opts: { workspace?: string; lines: string; verbose: boolean }) => {
     const workspace = new Workspace(resolveWorkspace(opts.workspace));
     const candidates = [
@@ -760,14 +760,14 @@ program
       say(filtered.slice(-parseInt(opts.lines, 10)).join("\n"));
       shown = true;
     }
-    if (!shown) say("暂无日志。");
+    if (!shown) say("ログはありません。");
   });
 
 program
   .command("workspace")
-  .description("Show workspace identity and project info")
+  .description("Workspace識別情報とプロジェクト情報を表示します")
   .option("-w, --workspace <path>")
-  .option("--json", "machine-readable output", false)
+  .option("--json", "機械処理用JSONを出力します", false)
   .action((opts: { workspace?: string; json: boolean }) => {
     const workspace = new Workspace(resolveWorkspace(opts.workspace));
     const project = workspace.detectProject();
@@ -775,8 +775,8 @@ program
     if (opts.json) say(JSON.stringify(data));
     else {
       say(`Workspace：${data.name}（${data.workspaceId}）`);
-      say(`类型：${data.projectType}  语言：${data.languages.join(", ") || "-"}`);
-      say(`路径：${data.root}`);
+      say(`種類：${data.projectType}  言語：${data.languages.join(", ") || "-"}`);
+      say(`パス：${data.root}`);
     }
   });
 
@@ -785,8 +785,8 @@ program
 acceptUnusedWorkspaceOption(
   program
     .command("sandbox-allow")
-    .description("Add the local settings directory to the Codex sandbox allowlist")
-    .option("--json", "machine-readable output", false)
+    .description("ローカル設定ディレクトリをCodexサンドボックスの許可設定へ追加します")
+    .option("--json", "機械処理用JSONを出力します", false)
 )
   .action((opts: { json: boolean }) => {
     const result = trySandboxAllow();
@@ -796,106 +796,60 @@ acceptUnusedWorkspaceOption(
       return;
     }
     if (!result.ok) {
-      cross(`无法写入 Codex 沙箱白名单：${result.error}`);
+      cross(`Codexサンドボックスの許可設定へ書き込めません：${result.error}`);
       process.exitCode = 1;
       return;
     }
-    if (result.alreadyAllowed) check("沙箱白名单已就绪，后续对话无需再提权");
-    else check("已将本地设置目录加入 Codex 沙箱白名单（后续对话无需再提权）");
+    if (result.alreadyAllowed) check("サンドボックス許可設定は準備済みです");
+    else check("ローカル設定ディレクトリをCodexサンドボックスの許可設定へ追加しました（后续对话无需再提权）");
   });
 
-// ---------------------------------------------------------------- update-check (once per local day)
-
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-
-function runGit(args: string[]): { ok: boolean; stdout: string } {
-  const result = spawnSync("git", args, {
-    cwd: repoRoot,
-    encoding: "utf8",
-    timeout: 8000,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
-    windowsHide: true,
-  });
-  return { ok: result.status === 0, stdout: (result.stdout ?? "").trim() };
-}
+// ---------------------------------------------------------------- update-check（外部照会なし）
 
 acceptUnusedWorkspaceOption(
   program
     .command("update-check")
-    .description("Check GitHub for a newer version (real check at most once per local day)")
-    .option("--force", "check even if already checked today", false)
-    .option("--json", "machine-readable output", false)
+    .description("更新確認は外部照会せず、未確認状態を返します")
+    .option("--force", "互換性のため受け付けます（外部照会は行いません）", false)
+    .option("--json", "機械処理用JSONを出力します", false)
 )
   .action((opts: { force: boolean; json: boolean }) => {
-    const file = path.join(getStateDir(), "update-check.json");
-    const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local tz
-    let last: { date?: string; updateAvailable?: boolean } = {};
-    try {
-      last = JSON.parse(fs.readFileSync(file, "utf8")) as typeof last;
-    } catch {
-      /* first run */
+    const note = "プライバシー設定により自動更新確認を停止しています。更新状況は未確認です。";
+    if (opts.json) {
+      say(JSON.stringify({ ok: true, version: VERSION, checked: false, updateAvailable: false, disabled: true, note }));
+    } else {
+      say(note);
     }
-
-    const emit = (data: {
-      checked: boolean;
-      updateAvailable: boolean;
-      localCommit?: string;
-      remoteCommit?: string;
-      note?: string;
-    }): void => {
-      if (opts.json) say(JSON.stringify({ ok: true, version: VERSION, ...data }));
-      else if (data.updateAvailable) say(`发现新版本（本地 ${data.localCommit?.slice(0, 7)} → 远端 ${data.remoteCommit?.slice(0, 7)}）。`);
-      else say(data.note ?? "已是最新版本。");
-    };
-
-    if (!opts.force && last.date === today) {
-      emit({ checked: false, updateAvailable: last.updateAvailable ?? false, note: "今天已检查过更新。" });
-      return;
-    }
-
-    const local = runGit(["rev-parse", "HEAD"]);
-    const remote = runGit(["ls-remote", "origin", "HEAD"]);
-    if (!local.ok || !remote.ok || !remote.stdout) {
-      // Offline or not a git checkout: skip quietly and retry tomorrow-ish (do not
-      // record the date so a transient failure does not suppress the daily check).
-      emit({ checked: false, updateAvailable: false, note: "无法检查更新（离线或非 git 安装），已跳过。" });
-      return;
-    }
-    const remoteCommit = remote.stdout.split(/\s/)[0];
-    const updateAvailable = remoteCommit !== local.stdout;
-    fs.mkdirSync(getStateDir(), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ date: today, updateAvailable, remoteCommit }), { mode: 0o600 });
-    emit({ checked: true, updateAvailable, localCommit: local.stdout, remoteCommit });
   });
 
 // ---------------------------------------------------------------- session (ChatGPT conversation / Project memory)
 
 const session = program
   .command("session")
-  .description("Remember the ChatGPT Project and conversation for this workspace");
+  .description("このWorkspaceのChatGPT Projectと会話情報を保存します");
 
 session
   .command("get", { isDefault: true })
-  .description("Show the saved ChatGPT conversation / Project for this workspace")
+  .description("保存済みのChatGPT会話・Project情報を表示します")
   .option("-w, --workspace <path>")
-  .option("--json", "machine-readable output", false)
+  .option("--json", "機械処理用JSONを出力します", false)
   .action((opts: { workspace?: string; json: boolean }) => {
     const workspace = new Workspace(resolveWorkspace(opts.workspace));
     const saved = readSession(workspace.id);
     const conversation = resolveConversation(saved);
     if (opts.json) say(JSON.stringify({ ok: true, session: saved, conversation }));
     else if (!saved) {
-      say("尚未记录 ChatGPT 会话。新仓库默认使用 Project 合集。");
+      say("ChatGPT会話はまだ保存されていません。");
     } else {
-      say(`模式：${conversation.mode === "project" ? "Project 合集" : "长对话"}`);
-      if (conversation.projectUrl) say(`合集：${conversation.projectUrl}`);
-      if (saved.title) say(`会话：${saved.title}`);
-      if (saved.url) say(`对话：${saved.url}`);
-      if (saved.connectorName) say(`连接器：${saved.connectorName}`);
-      if (saved.taskId) say(`任务：${saved.taskId}（第 ${saved.iteration ?? 0} 轮，${saved.lastState ?? "?"}）`);
+      say(`モード：${conversation.mode === "project" ? "ChatGPT Project" : "長期会話"}`);
+      if (conversation.projectUrl) say(`Project：${conversation.projectUrl}`);
+      if (saved.title) say(`会話：${saved.title}`);
+      if (saved.url) say(`会話URL：${saved.url}`);
+      if (saved.connectorName) say(`コネクター：${saved.connectorName}`);
+      if (saved.taskId) say(`タスク：${saved.taskId}（第 ${saved.iteration ?? 0} 轮，${saved.lastState ?? "?"}）`);
       if (saved.checkpoint) {
         say(
-          `存档：${saved.checkpoint.protocolState} / 等待 ${saved.checkpoint.waitingFor}（第 ${saved.checkpoint.iteration} 轮）`
+          `チェックポイント：${saved.checkpoint.protocolState} / 待機先 ${saved.checkpoint.waitingFor}（第 ${saved.checkpoint.iteration} 轮）`
         );
       }
     }
@@ -903,23 +857,23 @@ session
 
 session
   .command("set")
-  .description("Save the ChatGPT Project and/or conversation for this workspace")
+  .description("このWorkspaceのChatGPT Project・会話情報を保存します")
   .option("-w, --workspace <path>")
-  .option("--url <url>", "ChatGPT conversation URL from the address bar")
+  .option("--url <url>", "アドレスバーのChatGPT会話URL")
   .option("--title <title>")
   .option("--task <id>")
   .option("--iteration <n>")
-  .option("--state <state>", "last protocol state, e.g. EXECUTED")
-  .option("--mode <mode>", "long-chat or project")
-  .option("--project-url <url>", "ChatGPT Project collection URL (…/g/g-p-…/project)")
-  .option("--connector-name <name>", "exact connector title for this workspace")
-  .option("--protocol-state <state>", "checkpoint protocol state, e.g. EXECUTED_SENT")
+  .option("--state <state>", "直前のプロトコル状態（例: EXECUTED）")
+  .option("--mode <mode>", "long-chat または project")
+  .option("--project-url <url>", "ChatGPT Project URL（…/g/g-p-…/project）")
+  .option("--connector-name <name>", "このWorkspaceの正確なコネクター名")
+  .option("--protocol-state <state>", "チェックポイントのプロトコル状態（例: EXECUTED_SENT）")
   .option("--waiting-for <who>", "none | GPT_PLAN | GPT_REVIEW | USER")
-  .option("--goal <text>", "original task goal for resume / HANDOFF")
+  .option("--goal <text>", "再開・引継ぎ用の元タスク目標")
   .option("--completed-subtasks <text>")
   .option("--known-issues <text>")
   .option("--next-step <text>")
-  .option("--clear-checkpoint", "drop the active checkpoint (task DONE)", false)
+  .option("--clear-checkpoint", "アクティブなチェックポイントを消去します（タスク完了）", false)
   .action(
     (opts: {
       workspace?: string;
@@ -942,11 +896,11 @@ session
       const workspace = new Workspace(resolveWorkspace(opts.workspace));
       const modeRaw = opts.mode?.trim().toLowerCase();
       if (modeRaw && modeRaw !== "long-chat" && modeRaw !== "project") {
-        throw new Error("mode must be long-chat or project");
+        throw new Error("mode must be long-chat または project");
       }
       const protocolRaw = opts.protocolState?.trim().toUpperCase();
       if (protocolRaw && !PROTOCOL_STATES.includes(protocolRaw as ProtocolState)) {
-        throw new Error(`protocol-state must be one of ${PROTOCOL_STATES.join(", ")}`);
+        throw new Error(`protocol-stateには次のいずれかを指定してください: ${PROTOCOL_STATES.join(", ")}`);
       }
       const waitingRaw = opts.waitingFor?.trim();
       const waitingNorm = waitingRaw
@@ -955,7 +909,7 @@ session
           : waitingRaw.toUpperCase()
         : undefined;
       if (waitingNorm && !WAITING_FOR.includes(waitingNorm as WaitingFor)) {
-        throw new Error(`waiting-for must be one of ${WAITING_FOR.join(", ")}`);
+        throw new Error(`waiting-forには次のいずれかを指定してください: ${WAITING_FOR.join(", ")}`);
       }
       const saved = mergeSession(readSession(workspace.id), {
         url: opts.url,
@@ -980,34 +934,34 @@ session
       });
       writeSession(workspace.id, saved);
       if (saved.projectUrl && saved.conversationMode === "project") {
-        check("已记录 ChatGPT 合集，后续从合集页新开或复用对话");
+        check("ChatGPT Projectを保存しました");
       } else {
-        check("已记录 ChatGPT 会话，后续任务将复用");
+        check("ChatGPT会話情報を保存しました");
       }
     }
   );
 
 session
   .command("clear")
-  .description("Forget the current ChatGPT chat (Project binding is kept)")
+  .description("現在のChatGPT会話情報を消去します（Project設定は保持）")
   .option("-w, --workspace <path>")
   .action((opts: { workspace?: string }) => {
     const workspace = new Workspace(resolveWorkspace(opts.workspace));
     const result = clearChatPointer(workspace.id);
-    if (!result.cleared) say("尚未记录 ChatGPT 会话。");
-    else if (result.keptProject) check("已清除当前对话，合集绑定仍保留");
-    else check("已清除会话记录，下次任务将新建 ChatGPT 会话");
+    if (!result.cleared) say("ChatGPT会話情報は保存されていません。");
+    else if (result.keptProject) check("現在の会話情報を消去しました。Project設定は保持しています");
+    else check("会話情報を消去しました");
   });
 
 const prefsCmd = program
   .command("prefs")
-  .description("Remember ChatGPT developer mode and setup choice for this machine");
+  .description("この端末のChatGPT開発者モードと設定方式を保存します");
 
 acceptUnusedWorkspaceOption(
   prefsCmd
     .command("get", { isDefault: true })
-    .description("Show remembered ChatGPT setup choices (not per workspace)")
-    .option("--json", "machine-readable output", false)
+    .description("この端末に保存したChatGPT設定を表示します")
+    .option("--json", "機械処理用JSONを出力します", false)
 )
   .action((opts: { json: boolean }) => {
     const prefs = readUiPrefs();
@@ -1015,28 +969,28 @@ acceptUnusedWorkspaceOption(
       say(JSON.stringify({ ok: true, ...prefs }));
       return;
     }
-    say(prefs.developerModeEnabled ? "开发人员模式：已记住已开启" : "开发人员模式：尚未记住");
-    if (prefs.setupMode === "auto") say("配置方式：AI 自动化配置（预览版）");
-    else if (prefs.setupMode === "manual") say("配置方式：手动教学配置");
-    else say("配置方式：尚未选择");
+    say(prefs.developerModeEnabled ? "开发人员モード：已记住已开启" : "开发人员モード：尚未记住");
+    if (prefs.setupMode === "auto") say("設定方式：AIによる自動設定（プレビュー）");
+    else if (prefs.setupMode === "manual") say("設定方式：手動ガイド設定");
+    else say("設定方式：未選択");
   });
 
 acceptUnusedWorkspaceOption(
   prefsCmd
     .command("set")
-    .description("Save a ChatGPT setup choice for this machine")
-    .option("--developer-mode", "remember that ChatGPT developer mode is on", false)
-    .option("--setup-mode <mode>", "auto (preview) or manual")
-    .option("--json", "machine-readable output", false)
+    .description("この端末のChatGPT設定方式を保存します")
+    .option("--developer-mode", "ChatGPT開発者モードが有効であることを保存します", false)
+    .option("--setup-mode <mode>", "auto（プレビュー）またはmanual")
+    .option("--json", "機械処理用JSONを出力します", false)
 )
   .action((opts: { developerMode: boolean; setupMode?: string; json: boolean }) => {
     try {
       const modeRaw = opts.setupMode?.trim().toLowerCase();
       if (modeRaw && !SETUP_MODES.includes(modeRaw as SetupMode)) {
-        throw new Error(`setup-mode must be one of ${SETUP_MODES.join(", ")}`);
+        throw new Error(`setup-modeには次のいずれかを指定してください: ${SETUP_MODES.join(", ")}`);
       }
       if (!opts.developerMode && !modeRaw) {
-        throw new Error("nothing to save: pass --developer-mode and/or --setup-mode");
+        throw new Error("保存対象がありません。--developer-mode または --setup-mode を指定してください");
       }
       const prefs = mergeUiPrefs({
         developerModeEnabled: opts.developerMode ? true : undefined,
@@ -1046,9 +1000,9 @@ acceptUnusedWorkspaceOption(
         say(JSON.stringify({ ok: true, ...prefs }));
         return;
       }
-      if (opts.developerMode) check("已记住开发人员模式已开启");
-      if (modeRaw === "auto") check("已记住配置方式：AI 自动化配置（预览版）");
-      if (modeRaw === "manual") check("已记住配置方式：手动教学配置");
+      if (opts.developerMode) check("開発者モードを有効確認済みとして保存しました");
+      if (modeRaw === "auto") check("已记住設定方式：AIによる自動設定（プレビュー）");
+      if (modeRaw === "manual") check("已记住設定方式：手動ガイド設定");
     } catch (error) {
       handleCliError(error, opts.json);
     }
@@ -1056,18 +1010,18 @@ acceptUnusedWorkspaceOption(
 
 program
   .command("record", { hidden: true })
-  .description("Record a Codex execution summary (used by the Skill)")
+  .description("Codex実行サマリーを記録します（Skill用）")
   .option("-w, --workspace <path>")
   .requiredOption("--task <id>")
-  .requiredOption("--iteration <n>", "non-negative execution iteration", parseNonNegativeInteger)
-  .option("--changed-files <filesOrCount>", "comma-separated files or a count", "0")
-  .option("--tests <summary>", "e.g. '27 passed'")
+  .requiredOption("--iteration <n>", "0以上の実行回数", parseNonNegativeInteger)
+  .option("--changed-files <filesOrCount>", "カンマ区切りのファイル一覧または件数", "0")
+  .option("--tests <summary>", "例: '27 passed'")
   .option("--exit-status <status>", "ok | failed | blocked", "ok")
   .option("--notes <text>")
-  .option("--command <text>", "command whose output may be offered to ChatGPT")
-  .option("--output <text>", "command output (prefer --output-file for long logs)")
-  .option("--output-file <path>", "read command output from a local file")
-  .option("--exit-code <n>", "numeric exit code of that command", parseInteger)
+  .option("--command <text>", "ChatGPTへ提示可能な出力を生成したコマンド")
+  .option("--output <text>", "コマンド出力（長いログは--output-fileを推奨）")
+  .option("--output-file <path>", "ローカルファイルからコマンド出力を読み込みます")
+  .option("--exit-code <n>", "コマンドの数値終了コード", parseInteger)
   .action(
     (opts: {
       workspace?: string;
@@ -1112,20 +1066,20 @@ program
         outputId,
         outputAvailable,
       });
-      if (outputId !== undefined && !outputAvailable) check("已记录执行摘要（输出未对 ChatGPT 开放）");
-      else if (outputId !== undefined) check("已记录执行摘要与输出");
-      else check("已记录执行摘要");
+      if (outputId !== undefined && !outputAvailable) check("実行サマリーを記録しました（出力はChatGPTへ公開しません）");
+      else if (outputId !== undefined) check("実行サマリーと出力を記録しました");
+      else check("実行サマリーを記録しました");
     }
   );
 
-const tunnelCmd = program.command("tunnel").description("Choose or inspect the public connection for this workspace");
+const tunnelCmd = program.command("tunnel").description("このWorkspaceの公開接続方式を確認・設定します");
 
 tunnelCmd
   .command("status", { isDefault: true })
-  .description("Show whether this workspace still needs a one-time connection choice")
+  .description("公開接続方式の初回選択が必要か確認します")
   .option("-w, --workspace <path>")
-  .option("--zone <domain>", "optional domain, used to preview the stable hostname")
-  .option("--json", "machine-readable output", false)
+  .option("--zone <domain>", "固定ホスト名の確認に使う任意ドメイン")
+  .option("--json", "機械処理用JSONを出力します", false)
   .action((opts: { workspace?: string; zone?: string; json: boolean }) => {
     try {
       const workspace = new Workspace(resolveWorkspace(opts.workspace));
@@ -1136,7 +1090,7 @@ tunnelCmd
       }
       if (payload.needsChoice) say(TUNNEL_CHOICE_PROMPT);
       else if (payload.namedReady) check(`固定域名：${payload.hostname}`);
-      else say("当前使用临时地址。");
+      else say("現在は一時アドレスを使用しています。");
     } catch (error) {
       handleCliError(error, opts.json);
     }
@@ -1144,12 +1098,12 @@ tunnelCmd
 
 tunnelCmd
   .command("choose")
-  .description("Remember quick vs named, and provision a named hostname when asked")
-  .requiredOption("--mode <mode>", "quick or named")
+  .description("一時/固定接続の選択を保存し、必要に応じ固定ホスト名を設定します")
+  .requiredOption("--mode <mode>", "quick または named")
   .option("-w, --workspace <path>")
-  .option("--zone <domain>", "Cloudflare domain for a named hostname")
-  .option("--hostname <hostname>", "override the default c2c-<project>.<zone>")
-  .option("--json", "machine-readable output", false)
+  .option("--zone <domain>", "固定ホスト名に使用するCloudflareドメイン")
+  .option("--hostname <hostname>", "既定のc2c-<project>.<zone>を上書き")
+  .option("--json", "機械処理用JSONを出力します", false)
   .action(async (opts: { mode: string; workspace?: string; zone?: string; hostname?: string; json: boolean }) => {
     const root = resolveWorkspace(opts.workspace);
     try {
@@ -1163,18 +1117,18 @@ tunnelCmd
         }
         const payload = { ...tunnelChoicePayload(workspace), state };
         if (opts.json) say(JSON.stringify(payload));
-        else check("已选用临时地址");
+        else check("一時アドレスを選択しました");
         return;
       }
       if (mode !== "named") {
-        throw new Error("mode must be quick or named");
+        throw new Error("mode must be quick または named");
       }
       const zone = parseZoneInput(opts.zone ?? "");
       if (!zone) {
         const payload = {
           ok: false,
           need: "zone",
-          userMessage: "请告诉我已经加在 Cloudflare 上的域名，例如 example.com",
+          userMessage: "Cloudflareに登録済みのドメインを指定してください（例: example.com）",
           loginPrompt: NAMED_LOGIN_PROMPT,
         };
         if (opts.json) {
@@ -1205,7 +1159,7 @@ tunnelCmd
         return;
       }
       if (result.fallback) say(result.userMessage ?? "");
-      else check(`固定域名已就绪：${result.state.hostname}`);
+      else check(`固定ドメインを準備しました：${result.state.hostname}`);
     } catch (error) {
       handleCliError(error, opts.json);
     }
@@ -1214,8 +1168,8 @@ tunnelCmd
 acceptUnusedWorkspaceOption(
   tunnelCmd
     .command("login")
-    .description("Open the Cloudflare login window used by a named hostname")
-    .option("--json", "machine-readable output", false)
+    .description("固定ホスト名設定用のCloudflareログインを開始します")
+    .option("--json", "機械処理用JSONを出力します", false)
 )
   .action(async (opts: { json: boolean }) => {
     try {
@@ -1224,7 +1178,7 @@ acceptUnusedWorkspaceOption(
       await account.login();
       const payload = { ok: true, loggedIn: hasCloudflaredCert() };
       if (opts.json) say(JSON.stringify(payload));
-      else check("Cloudflare 已登录");
+      else check("Cloudflareへログイン済みです");
     } catch (error) {
       handleCliError(error, opts.json);
     }
@@ -1235,11 +1189,11 @@ function handleCliError(error: unknown, json: boolean): void {
   if (json) {
     say(JSON.stringify({ ok: false, error: message }));
   } else if (message.startsWith("NEED_CLOUDFLARED")) {
-    say("需要你完成一步：");
+    say("追加操作が必要です：");
     say("");
-    say("尚未安装安全连接组件 cloudflared。");
-    say("macOS 用户可运行：brew install cloudflared");
-    say("完成后再试一次即可。");
+    say("安全な接続に必要なcloudflaredがインストールされていません。");
+    say("macOSでは `brew install cloudflared` で導入できます。");
+    say("導入後にもう一度実行してください。");
   } else {
     cross(message);
   }
