@@ -43,7 +43,7 @@ function requireScope(authInfo: AuthInfo | undefined, scope: string): ToolResult
   // authInfo is absent only for trusted in-process clients (tests / local stdio).
   if (!authInfo) return null;
   if (!authInfo.scopes.includes(scope)) {
-    return fail("INSUFFICIENT_SCOPE", `This operation requires the '${scope}' scope.`);
+    return fail("INSUFFICIENT_SCOPE", `この操作には '${scope}' scope が必要です。`);
   }
   return null;
 }
@@ -194,7 +194,7 @@ export function createMcpServer(ctx: McpContext): McpServer {
   server.registerTool(
     "workspace_info",
     {
-      title: "Workspace info",
+      title: "Workspace情報",
       description:
         `Get an overview of the connected workspace: identity, project type, languages, ` +
         `frameworks, git state and available scripts. Call this first. ${UNTRUSTED_NOTE}`,
@@ -229,13 +229,13 @@ export function createMcpServer(ctx: McpContext): McpServer {
   server.registerTool(
     "list_directory",
     {
-      title: "List directory",
+      title: "ディレクトリ一覧",
       description:
         `List files and directories under a workspace-relative path. High-noise directories ` +
         `(node_modules, .git, build output) are omitted. Supports pagination. ${UNTRUSTED_NOTE}`,
       inputSchema: {
-        path: z.string().default(".").describe("Workspace-relative path, e.g. 'src'"),
-        depth: z.number().int().min(1).max(4).default(1).describe("Recursion depth (1-4)"),
+        path: z.string().default(".").describe("Workspace相対パス（例: 'src'）"),
+        depth: z.number().int().min(1).max(4).default(1).describe("再帰深度（1～4）"),
         limit: z.number().int().min(1).max(1000).default(200),
         offset: z.number().int().min(0).default(0),
       },
@@ -256,15 +256,15 @@ export function createMcpServer(ctx: McpContext): McpServer {
   server.registerTool(
     "read_file",
     {
-      title: "Read file",
+      title: "ファイル読み取り",
       description:
         `Read a text file from the workspace with line-range pagination. Defaults to the first ` +
         `400 lines; use start_line/end_line to page through large files. Sensitive files ` +
         `(.env, keys, credentials) are always denied. ${UNTRUSTED_NOTE}`,
       inputSchema: {
-        path: z.string().describe("Workspace-relative file path"),
-        start_line: z.number().int().min(1).optional().describe("1-based first line to return"),
-        end_line: z.number().int().min(1).optional().describe("1-based last line to return"),
+        path: z.string().describe("Workspace相対のファイルパス"),
+        start_line: z.number().int().min(1).optional().describe("返す先頭行（1始まり）"),
+        end_line: z.number().int().min(1).optional().describe("返す最終行（1始まり）"),
       },
       outputSchema: readFileOutputSchema,
       annotations: { readOnlyHint: true },
@@ -283,16 +283,16 @@ export function createMcpServer(ctx: McpContext): McpServer {
   server.registerTool(
     "search_workspace",
     {
-      title: "Search workspace",
+      title: "Workspace検索",
       description:
         `Search file contents across the workspace (ripgrep when available). Returns matching ` +
         `lines with file paths and line numbers. ${UNTRUSTED_NOTE}`,
       inputSchema: {
-        query: z.string().min(2).describe("Text to search for (literal by default)"),
-        path: z.string().optional().describe("Restrict search to this workspace-relative path"),
-        glob: z.string().optional().describe("Filename glob filter, e.g. '*.ts'"),
+        query: z.string().min(2).describe("検索文字列（既定はリテラル検索）"),
+        path: z.string().optional().describe("検索対象をこのWorkspace相対パスに限定します"),
+        glob: z.string().optional().describe("ファイル名globフィルター（例: '*.ts'）"),
         limit: z.number().int().min(1).max(200).default(50),
-        regex: z.boolean().default(false).describe("Treat query as a regular expression"),
+        regex: z.boolean().default(false).describe("検索文字列を正規表現として扱います"),
       },
       outputSchema: searchWorkspaceOutputSchema,
       annotations: { readOnlyHint: true },
@@ -311,8 +311,8 @@ export function createMcpServer(ctx: McpContext): McpServer {
   server.registerTool(
     "git_status",
     {
-      title: "Git status",
-      description: `Structured git status of the workspace: branch, staged/unstaged/untracked files. ${UNTRUSTED_NOTE}`,
+      title: "Git状態",
+      description: `WorkspaceのGit状態を構造化して返します。branch、staged、unstaged、untrackedを含みます。 ${UNTRUSTED_NOTE}`,
       inputSchema: {},
       outputSchema: gitStatusOutputSchema,
       annotations: { readOnlyHint: true },
@@ -331,14 +331,14 @@ export function createMcpServer(ctx: McpContext): McpServer {
   server.registerTool(
     "git_diff",
     {
-      title: "Git diff",
+      title: "Git差分",
       description:
-        `Git diff with byte-offset pagination. mode: 'unstaged' (default), 'staged', or 'head' ` +
+        `Git差分 with byte-offset pagination. mode: 'unstaged' (default), 'staged', or 'head' ` +
         `(working tree vs HEAD). When hasMore is true, call again with offset=nextOffset. ${UNTRUSTED_NOTE}`,
       inputSchema: {
         mode: z.enum(["unstaged", "staged", "head"]).default("unstaged"),
-        path: z.string().optional().describe("Limit the diff to one workspace-relative path"),
-        offset: z.number().int().min(0).default(0).describe("Byte offset for pagination"),
+        path: z.string().optional().describe("差分対象を1つのWorkspace相対パスに限定します"),
+        offset: z.number().int().min(0).default(0).describe("ページング用byte offset"),
         max_bytes: z.number().int().min(1024).max(262144).default(65536),
       },
       outputSchema: gitDiffOutputSchema,
@@ -368,7 +368,7 @@ export function createMcpServer(ctx: McpContext): McpServer {
   server.registerTool(
     "test_status",
     {
-      title: "Test status",
+      title: "テスト状態",
       description:
         `Summary of the most recent test run reported by the Codex harness. This does NOT run ` +
         `tests; it reads the latest execution record. ${UNTRUSTED_NOTE}`,
@@ -381,7 +381,7 @@ export function createMcpServer(ctx: McpContext): McpServer {
       if (denied) return denied;
       const latest = latestExecutionRecord(workspace.id);
       if (!latest) {
-        return okStructured({ available: false, message: "No execution records yet for this workspace." });
+        return okStructured({ available: false, message: "このWorkspaceにはまだ実行記録がありません。" });
       }
       return okStructured({
         available: true,
@@ -399,7 +399,7 @@ export function createMcpServer(ctx: McpContext): McpServer {
   server.registerTool(
     "execution_summary",
     {
-      title: "Execution summary",
+      title: "実行サマリー",
       description:
         `Recent Codex execution records for this workspace: task id, iteration, changed files, ` +
         `tests and exit status. Use it after Codex reports EXECUTED. ${UNTRUSTED_NOTE}`,
@@ -419,7 +419,7 @@ export function createMcpServer(ctx: McpContext): McpServer {
   server.registerTool(
     "execution_output",
     {
-      title: "Execution output",
+      title: "実行出力",
       description:
         `List or read command output that Codex chose to record after a test/build/lint/typecheck ` +
         `run. Call with action=list first, then action=read and an id. Restricted items have no ` +
@@ -451,7 +451,7 @@ export function createMcpServer(ctx: McpContext): McpServer {
         }));
         return okStructured({ action: "list", items });
       }
-      if (args.id === undefined) return fail("INVALID_ARGUMENTS", "read requires id");
+      if (args.id === undefined) return fail("INVALID_ARGUMENTS", "readにはidが必要です");
       const result = readExecutionOutput(workspace.id, args.id);
       if (!result.ok) {
         if (result.error === "OUTPUT_RESTRICTED") {
