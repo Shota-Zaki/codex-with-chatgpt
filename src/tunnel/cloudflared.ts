@@ -232,8 +232,8 @@ export class CloudflaredQuickTunnel implements TunnelProvider {
             });
           }
           if (/\b(?:ERR|error|failed|fatal)\b/i.test(line)) {
-            this.lastError = line.slice(0, 400);
-            this.logger.debug(`cloudflared: ${line.slice(0, 400)}`);
+            this.lastError = "cloudflaredがエラーを報告しました";
+            this.logger.debug(this.lastError);
           }
         });
       };
@@ -253,7 +253,7 @@ export class CloudflaredQuickTunnel implements TunnelProvider {
         if (this.child === child) {
           this.child = null;
           this.url = null;
-          this.lastError = `cloudflared exited (code ${code})`;
+          this.lastError = `cloudflaredが終了しました（終了コード ${code}）`;
         }
         this.logger.warn(`cloudflaredが終了しました（終了コード ${code}）`);
         if (!settled) {
