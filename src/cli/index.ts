@@ -1,8 +1,6 @@
 import { Command, InvalidArgumentError } from "commander";
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { startBridge } from "../bridge/server.js";
 import { findBridgeObservation, findLiveBridge, type RuntimeState } from "../bridge/runtime.js";
 import { adminFetch, ensureBridge, stopBridge } from "../process/daemon.js";
