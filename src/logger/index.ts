@@ -60,10 +60,31 @@ export class Logger {
     }
     const line = parts.join(" ") + "\n";
     if (this.file) {
+      let fd: number | null = null;
       try {
-        fs.appendFileSync(this.file, line, { mode: 0o600 });
+        if (fs.existsSync(this.file)) {
+          const current = fs.lstatSync(this.file);
+          if (!current.isFile() || current.isSymbolicLink()) return;
+        }
+        const noFollow = process.platform === "win32" ? 0 : fs.constants.O_NOFOLLOW;
+        fd = fs.openSync(
+          this.file,
+          fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | noFollow,
+          0o600
+        );
+        if (!fs.fstatSync(fd).isFile()) return;
+        try {
+          fs.fchmodSync(fd, 0o600);
+        } catch {
+          // Windowsなどchmodの意味が異なる環境ではbest effort。
+        }
+        fs.writeSync(fd, line);
       } catch {
-        // logging must never crash the bridge
+        // ログ失敗でBridge本体を停止しない。
+      } finally {
+        if (fd !== null) {
+          try { fs.closeSync(fd); } catch { /* 既に閉じている場合は無視。 */ }
+        }
       }
     }
     if (this.useConsole) process.stderr.write(line);
