@@ -1,6 +1,6 @@
-# Security Model
+# セキュリティモデル
 
-## Trust boundaries
+## 目的
 
 1. **Workspace root is the authorization boundary.** One bridge serves exactly one Workspace and every access/refresh token is bound to that `workspace_id`. A Workspace may contain one Git repository or multiple explicitly separated repository contexts. A token for Workspace A still returns 403 on Workspace B's bridge.
 2. **Repository contexts never widen the Workspace boundary.** Repository roots must resolve inside the authorized Workspace. Repository-scoped paths are canonicalized first against the Workspace and then checked again against the selected repository, so `..`, absolute paths and symlink tricks cannot escape into a sibling repository or outside the Workspace.
@@ -24,7 +24,7 @@ When a Workspace contains multiple repositories:
 
 This separation is deliberately suitable for future cross-repository Goal/Plan/Review support: orchestration may reference multiple repository ids, while repository-local Git, execution and evidence remain independently addressable.
 
-## Threat model → mitigations
+主な防御対象:
 
 | Threat | Mitigation |
 | --- | --- |
@@ -105,7 +105,13 @@ Recognized secret categories include:
 
 Private-key material is stricter than redaction: the entire outbound response is withheld with a safe error rather than returning a partially redacted key block.
 
-## Storage
+## 外向き通信と子プロセス
+
+起動時privacy bootstrapはglobal `fetch`を制限する。loopback HTTPと、登録済み固定TunnelまたはQuick Tunnelへの本文・queryなし`GET`/`HEAD /health`だけを許可する。公開先への確認では認証情報・任意header・redirectを引き継がない。Bridge daemon、Git、ripgrep、cloudflaredには用途別allowlist環境だけを渡し、親shellのAPI keyやcredential helper用Secretを継承しない。
+
+macOS常駐Supervisorは外部Volume UUID、mount point、Workspace/Repositoryのcanonical path、状態・起動ディレクトリをworker起動前に検証する。LaunchDaemon定義の生成とroot権限でのsystem登録・起動は分離し、Repository CLIから権限昇格を実行しない。
+
+Mac mini構成では次がWorkspace境界です。
 
 State lives under the OS-convention app directory (`~/Library/Application Support/codex-with-chatgpt` on macOS and `%LOCALAPPDATA%\codex-with-chatgpt` on Windows), not inside application repositories. Named-hostname preference and tunnel metadata also live in that state directory.
 

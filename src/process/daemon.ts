@@ -8,16 +8,27 @@ import { Workspace } from "../workspace/manager.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/** Path to the CLI entry, works from dist/ and from tsx dev runs. */
-function cliEntry(): { cmd: string; args: string[] } {
-  const distEntry = path.resolve(__dirname, "..", "cli", "index.js");
-  if (fs.existsSync(distEntry)) {
-    return { cmd: process.execPath, args: [distEntry] };
+const DAEMON_ENV_KEYS = [
+  "HOME", "USER", "LOGNAME", "PATH", "PATHEXT", "SYSTEMROOT", "SystemRoot", "WINDIR", "ComSpec",
+  "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "APPDATA", "TEMP", "TMP", "TMPDIR",
+  "XDG_STATE_HOME", "LANG", "LC_ALL", "TZ",
+  "C2C_STATE_DIR", "C2C_LOG_LEVEL", "C2C_TUNNEL_PROTOCOL", "C2C_CLOUDFLARED_PATH",
+  "C2C_DISABLE_RG", "C2C_RG_PATH",
+] as const;
+
+/** Bridge daemonへ必要なOS/C2C設定だけを引き継ぎ、親shellの秘密情報を渡さない。 */
+export function daemonEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const safe: NodeJS.ProcessEnv = {};
+  for (const key of DAEMON_ENV_KEYS) {
+    const value = env[key];
+    if (value !== undefined) safe[key] = value;
   }
-  // dev fallback: run TypeScript sources through the tsx ESM loader
-  const projectRoot = path.resolve(__dirname, "..", "..");
-  const tsEntry = path.join(projectRoot, "src", "cli", "index.ts");
-  return { cmd: process.execPath, args: ["--import", "tsx/esm", tsEntry] };
+  return safe;
+}
+
+/** daemonからの起動をプライバシー初期化付きの共通エントリーへ統一する。 */
+function cliEntry(): { cmd: string; args: string[] } {
+  return { cmd: process.execPath, args: [path.resolve(__dirname, "..", "..", "bin", "c2c.js")] };
 }
 
 export interface EnsureBridgeResult {
@@ -25,54 +36,58 @@ export interface EnsureBridgeResult {
   spawned: boolean;
 }
 
-/**
- * Ensure a bridge is running for the workspace. Reuses a live instance,
- * otherwise spawns a detached daemon and waits for it to become healthy.
- */
 export async function ensureBridge(workspaceRoot: string, opts: { port?: number } = {}): Promise<EnsureBridgeResult> {
   const workspace = new Workspace(workspaceRoot);
   const observation = await findBridgeObservation(workspace.id);
   if (observation.state === "healthy") return { runtime: observation.runtime, spawned: false };
   if (observation.state === "unknown") {
-    throw new Error(
-      `Bridge state is uncertain (${observation.reason}); refusing to start another bridge.`
-    );
+    throw new Error(`接続サービスの状態を確認できません（${observation.reason}）。重複起動を停止しました。`);
   }
 
   const logDir = ensureDir(path.join(getStateDir(), "logs"));
   const logFile = path.join(logDir, `bridge-${workspace.id}.out.log`);
   const out = fs.openSync(logFile, "a", 0o600);
   try {
-    // Existing files may have been created with a permissive umask. Keep the
-    // daemon's inherited stdout/stderr log owner-readable only.
     fs.chmodSync(logFile, 0o600);
   } catch {
-    // Windows / filesystems without chmod semantics
+    /* 権限モデルが異なるOSでは既存仕様を維持。 */
   }
+
   const { cmd, args } = cliEntry();
-  const child = spawn(
-    cmd,
-    [...args, "serve", "--workspace", workspace.root, ...(opts.port ? ["--port", String(opts.port)] : [])],
-    {
-      detached: true,
-      stdio: ["ignore", out, out],
-      env: { ...process.env },
-      windowsHide: true,
-    }
-  );
+  let child: ReturnType<typeof spawn>;
+  try {
+    child = spawn(
+      cmd,
+      [...args, "serve", "--workspace", workspace.root, ...(opts.port ? ["--port", String(opts.port)] : [])],
+      {
+        detached: true,
+        stdio: ["ignore", out, out],
+        env: daemonEnvironment(),
+        windowsHide: true,
+      }
+    );
+  } finally {
+    fs.closeSync(out);
+  }
+
+  let spawnError: Error | null = null;
+  child.on("error", error => {
+    spawnError = error;
+  });
   child.unref();
-  fs.closeSync(out);
 
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise(resolve => setTimeout(resolve, 300));
+    if (spawnError) throw new Error("接続サービスのプロセスを起動できません。");
     const runtime = await findLiveBridge(workspace.id);
     if (runtime) return { runtime, spawned: true };
     if (child.exitCode !== null && child.exitCode !== 0) {
-      throw new Error(`Bridge process exited with code ${child.exitCode}. See ${logFile}`);
+      throw new Error(`接続サービスが終了しました（終了コード ${child.exitCode}）。ログを確認してください。`);
     }
   }
-  throw new Error(`Bridge did not become healthy within 20s. See ${logFile}`);
+
+  throw new Error(`接続サービスの起動確認がタイムアウトしました。ログ: ${logFile}`);
 }
 
 export async function adminFetch<T = unknown>(
@@ -88,10 +103,11 @@ export async function adminFetch<T = unknown>(
       method,
       headers: { Authorization: `Bearer ${runtime.adminToken}` },
       signal: controller.signal,
+      redirect: "error",
     });
     const body = (await response.json().catch(() => ({}))) as T & { message?: string };
     if (!response.ok) {
-      throw new Error((body as { message?: string }).message ?? `Admin request failed (${response.status})`);
+      throw new Error(body.message ?? `管理要求に失敗しました（HTTP ${response.status}）。`);
     }
     return body;
   } finally {

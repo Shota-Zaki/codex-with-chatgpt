@@ -9,7 +9,7 @@ import {
   writeRuntimeState,
   type RuntimeState,
 } from "../src/bridge/runtime.js";
-import { ensureBridge } from "../src/process/daemon.js";
+import { daemonEnvironment, ensureBridge } from "../src/process/daemon.js";
 import { SERVICE_NAME, VERSION } from "../src/version.js";
 import { Workspace } from "../src/workspace/manager.js";
 import { cleanup, isolateStateDir, makeTmpDir, write } from "./helpers.js";
@@ -27,6 +27,32 @@ function stubRuntime(workspaceId: string, workspaceRoot: string, pid: number, po
     startedAt: new Date().toISOString(),
   };
 }
+
+describe("daemonEnvironment", () => {
+  it("Bridgeに必要な設定だけを継承し秘密情報を除外する", () => {
+    const env = daemonEnvironment({
+      HOME: "/Users/test",
+      PATH: "/usr/bin:/bin",
+      C2C_STATE_DIR: "/Users/test/state",
+      C2C_TUNNEL_PROTOCOL: "http2",
+      OPENAI_API_KEY: "secret-openai",
+      GITHUB_TOKEN: "secret-github",
+      CLOUDFLARE_API_TOKEN: "secret-cloudflare",
+      NODE_OPTIONS: "--require /tmp/injected.js",
+      HTTPS_PROXY: "http://user:password@example.invalid",
+    });
+
+    expect(env.HOME).toBe("/Users/test");
+    expect(env.PATH).toBe("/usr/bin:/bin");
+    expect(env.C2C_STATE_DIR).toBe("/Users/test/state");
+    expect(env.C2C_TUNNEL_PROTOCOL).toBe("http2");
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+    expect(env.GITHUB_TOKEN).toBeUndefined();
+    expect(env.CLOUDFLARE_API_TOKEN).toBeUndefined();
+    expect(env.NODE_OPTIONS).toBeUndefined();
+    expect(env.HTTPS_PROXY).toBeUndefined();
+  });
+});
 
 describe("findBridgeObservation", () => {
   const dirs: string[] = [];
@@ -80,7 +106,7 @@ describe("findBridgeObservation", () => {
       expect(observation.state).toBe("unknown");
       if (observation.state === "unknown") expect(observation.reason).toBe("probe_failed");
       expect(await findLiveBridge(workspace.id)).toBeNull();
-      await expect(ensureBridge(root)).rejects.toThrow(/uncertain/);
+      await expect(ensureBridge(root)).rejects.toThrow(/状態を確認できません/);
     } finally {
       if (child.pid) {
         try {

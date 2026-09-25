@@ -149,7 +149,7 @@ describe("authorization + token flow", () => {
     const result = await authorizeWithPairing(clientId, challenge, "AAAA-AAAA");
     expect(result.code).toBeNull();
     expect(result.status).toBe(401);
-    expect(result.page).toContain("Incorrect pairing code");
+    expect(result.page).toContain("ペアリングコードが正しくありません。");
   });
 
   it("escapes the workspace name in the pairing page", async () => {

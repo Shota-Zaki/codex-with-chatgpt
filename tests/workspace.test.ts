@@ -48,7 +48,12 @@ describe("path containment", () => {
 
   it("rejects ../ traversal", () => {
     expect(() => ws.resolve("../outside-file")).toThrowError(WorkspaceError);
-    expect(() => ws.resolve("../../etc/passwd")).toThrow(/PATH_OUTSIDE|outside/i);
+    expect(() => ws.resolve("../../etc/passwd")).toThrowError(WorkspaceError);
+    try {
+      ws.resolve("../../etc/passwd");
+    } catch (error) {
+      expect((error as WorkspaceError).code).toBe("PATH_OUTSIDE_WORKSPACE");
+    }
     try {
       ws.resolve("a/../../b");
     } catch (error) {

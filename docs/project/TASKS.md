@@ -50,7 +50,7 @@
         }
       ],
       "evidence": [
-        "docs/evidence/C2C-005/2026-09-17-baseline-no-device-completion.md"
+        "docs/evidence/C2C-007/2026-09-26-origin-work-integration.md"
       ],
       "reason": "2026-09-17にupstream main 9663b88753e35c76796c5bce000293e0bd22cd9eまで再確認し、既監査範囲から追加commitがないことを確認した"
     },
@@ -109,8 +109,9 @@
         }
       ],
       "evidence": [
-        "docs/evidence/C2C-005/2026-09-17-baseline-no-device-completion.md"
-      ]
+        "docs/evidence/C2C-007/2026-09-26-origin-work-integration.md"
+      ],
+      "reason": "既存Done candidateの対象ファイルがorigin/work統合で変わったため、現candidateの検証記録へ差し替え中。"
     },
     {
       "id": "C2C-003",
@@ -177,7 +178,7 @@
         }
       ],
       "evidence": [
-        "docs/evidence/C2C-005/2026-09-17-baseline-no-device-completion.md"
+        "docs/evidence/C2C-007/2026-09-26-origin-work-integration.md"
       ],
       "reason": "実機・実接続受入は明示指示により非必須化し、代替できない実接続成功を主張せずコード契約と自動検証をRequiredとした"
     },
@@ -211,7 +212,7 @@
         {
           "id": "V-C2C-004-CANDIDATE",
           "required": true,
-          "method": "GitHub Actions Node 22: frozen install + pnpm test + typecheck + build",
+          "method": "Node.js 22 candidate: pnpm 11.24.0 frozen install + pnpm test + typecheck + build",
           "acceptance": [
             "C2C-004-A1",
             "C2C-004-A2"
@@ -238,7 +239,7 @@
         }
       ],
       "evidence": [
-        "docs/evidence/C2C-005/2026-09-17-baseline-no-device-completion.md"
+        "docs/evidence/C2C-007/2026-09-26-origin-work-integration.md"
       ],
       "reason": "実機確認を完了条件から外す明示的なユーザー仕様変更を受け、Required Verificationは自動実行可能なcandidate検証へ限定した"
     },
@@ -296,14 +297,14 @@
         }
       ],
       "evidence": [
-        "docs/evidence/C2C-005/2026-09-17-baseline-no-device-completion.md"
+        "docs/evidence/C2C-007/2026-09-26-origin-work-integration.md"
       ],
       "reason": "Repository内Baseline確定作業を完了し、公開(main反映)は明示依頼が必要な別作業として実施していない"
     },
     {
       "id": "C2C-006",
       "purpose": "RepositoryごとのC2C設定・接続作成を不要にする端末共通Approved RootとWindows単一Workspace運用を導入する",
-      "status": "In Progress",
+      "status": "Done",
       "priority": "P0",
       "scope": [
         "bin/**",
@@ -353,7 +354,7 @@
         {
           "id": "V-C2C-006-PACKAGE",
           "required": true,
-          "method": "corepack pnpm install --frozen-lockfile + pnpm test + pnpm typecheck + pnpm build + project-state/diff gate",
+          "method": "Node.js 22 + pnpm 11.24.0 frozen install + pnpm test + typecheck + build + project-state/diff gate",
           "acceptance": [
             "C2C-006-A1",
             "C2C-006-A2",
@@ -368,9 +369,80 @@
         }
       ],
       "evidence": [
-        "docs/evidence/C2C-006/2026-09-17-global-approved-roots.md"
+        "docs/evidence/C2C-007/2026-09-26-origin-work-integration.md"
       ],
-      "reason": "Approved RootとWindows C:\\project single-workspaceのFocused verificationはpass。実行環境からnpm registryへ到達できずfull package suiteとproject-state/diff gateが未実施のため継続中。"
+      "reason": "Approved Root, zero-config candidate, full package verification, and Repository state/diff gate all passed in this environment."
+    },
+    {
+      "id": "C2C-007",
+      "purpose": "Mac常駐運用とprivacy/child-process hardeningを現行Hardened Forkへ適応し、Approved Root・Multi-Repository契約との互換を確認する",
+      "status": "Done",
+      "priority": "P0",
+      "scope": [
+        "**"
+      ],
+      "dependencies": [
+        "C2C-005"
+      ],
+      "references": [
+        "docs/design/REQUIREMENTS.md",
+        "docs/design/BASIC_DESIGN.md",
+        "docs/design/DETAILED_DESIGN.md",
+        "docs/security.md"
+      ],
+      "acceptance": [
+        {
+          "id": "C2C-007-A1",
+          "condition": "外部HTTP送信制御、子プロセス環境制限、macOS Supervisorが現行CLI/daemon/Tunnel構成に統合され、明示的なroot登録・起動境界を維持する"
+        },
+        {
+          "id": "C2C-007-A2",
+          "condition": "既存Approved Root、C2C-006 single-workspace、Multi-Repository selector/confinementが維持され、Mac常駐Workspaceで同一契約を利用できる"
+        },
+        {
+          "id": "C2C-007-A3",
+          "condition": "既存のSecurity hardening、日本語化、固定dependency、手動Update policyを維持し、必須package検証と状態/diff gateを通過する"
+        }
+      ],
+      "verification": [
+        {
+          "id": "V-C2C-007-RUNTIME",
+          "required": true,
+          "method": "Node runtime privacy/service tests + pnpm test + typecheck + build",
+          "acceptance": [
+            "C2C-007-A1",
+            "C2C-007-A2"
+          ],
+          "targets": [
+            "runtime/privacy.mjs",
+            "runtime/macos-supervisor.mjs",
+            "src/process/daemon.ts",
+            "src/workspace/repositories.ts",
+            "bin/c2c.js"
+          ]
+        },
+        {
+          "id": "V-C2C-007-PACKAGE",
+          "required": true,
+          "method": "Node.js 22 + pnpm 11.24.0 frozen install + pnpm test + typecheck + build + project-state/diff gate",
+          "acceptance": [
+            "C2C-007-A1",
+            "C2C-007-A2",
+            "C2C-007-A3"
+          ],
+          "targets": [
+            "package.json",
+            "pnpm-lock.yaml",
+            "src/cli/index.ts",
+            "src/mcp/server.ts",
+            "tests/runtime/privacy.node.mjs"
+          ]
+        }
+      ],
+      "evidence": [
+        "docs/evidence/C2C-007/2026-09-26-origin-work-integration.md"
+      ],
+      "reason": "Mac privacy/runtime and child-process controls are integrated with existing Approved Root/Multi-Repository behavior; required tests, typecheck, build and state/diff gate passed."
     }
   ]
 }

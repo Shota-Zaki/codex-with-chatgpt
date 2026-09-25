@@ -57,6 +57,14 @@ Workspace単位JSONL/indexは維持し、record/output metadataに任意の `rep
 
 upstreamはcommit単位で監査し、Hardened Forkの固定dependency、Security hardening、日本語化、手動検証Update policyを優先する。upstream versionはFork prerelease suffixで表現し、単純mergeしない。
 
+## macOS常駐Supervisorと通信境界
+
+`runtime/privacy.mjs` は起動時にglobal fetchを包み、loopback HTTP、または許可済みNamed Tunnel/Quick Tunnelへの本文なし`GET`/`HEAD /health`だけを許可する。Redirect、credential、query、bodyを伴う外部要求は拒否し、安全な固定メッセージ以外の要求情報をerrorへ含めない。
+
+`bin/c2c.js` と開発起動経路は `runtime/bootstrap.mjs` を先に読み込む。Bridge daemon、Git、ripgrep、cloudflaredへは各用途のallowlistでOS実行に必要な環境変数と明示されたC2C設定だけを渡す。
+
+`scripts/macos-service.mjs` の`plan`はread-only。`prepare`/`install-agent`は設定生成のみでサービスを開始しない。Supervisorは`/Volumes/ZAKKO_DEV`のUUID、mount point、`repos` Workspace、Workspace内Repository、state/runtime pathを再検証し、条件不一致時はworkerを起動しない。workerは同一workspace lockを保持して固定Tunnelの状態を監視する。system LaunchDaemonの登録・起動はこのCLIの責務外とする。
+
 ## Reconnect pairing
 
 `c2c doctor` は再接続に必要な状態診断・Tunnel/Connector修復情報の提示までを担当し、Connector再作成時のpairing codeは発行しない。pairing codeはChatGPTの認証フォームが表示された時点で `c2c pair -w <workspace> --json` からfresh発行し、期限切れ・使い捨てcodeの先行消費を避ける。初回 `c2c setup` のpairing発行は既存互換として維持する。

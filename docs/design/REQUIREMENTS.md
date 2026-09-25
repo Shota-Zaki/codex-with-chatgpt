@@ -16,6 +16,9 @@
 - 既存単一Repository Workspaceは後方互換で動作する。
 - 既存Repositoryを親Workspace配下へ移行してもRepository identityとstandalone execution historyを引き継げる。
 - Cloudflare Quick/Named Tunnel、ChatGPT接続/再接続、Project/long-chat recovery、Windows CLIを維持する。
+- macOS常駐運用では、Workspace内のRepositoryだけを対象にLaunchAgent/LaunchDaemon向けの起動設定を生成し、外部Volume未接続時はBridgeを起動しない。
+- 常駐サービスとBridge/Tunnel/Git/ripgrep子プロセスには必要なOS・C2C設定だけを渡し、親shellのSecret環境変数を継承しない。
+- 公開TunnelへのHTTP通信は固定TunnelまたはQuick Tunnelの本文なし`/health`確認に限定し、通常のBridge/API fetchはloopback内に限定する。
 
 ## Security
 
@@ -26,6 +29,8 @@
 - Secret/Credential/Token/OAuth保護、Credential masking、outbound sanitizer、`.c2cignore`を維持する。
 - `git_status`は機密path名を返さず件数のみ返す。
 - 自動`git pull`、自動stash/reset、無検証自動更新を実装しない。
+- macOS常駐設定の生成は明示CLI操作に限定し、root権限でのLaunchDaemon登録・起動を自動実行しない。
+- 外部Volumeはmount pathだけでなくVolume UUIDとcanonical pathを確認し、未接続・差替え・Repository境界外では起動しない。
 
 ## Verification
 

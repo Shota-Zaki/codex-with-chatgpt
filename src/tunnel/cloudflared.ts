@@ -3,7 +3,7 @@ import readline from "node:readline";
 import type { Logger } from "../logger/index.js";
 import { nullLogger } from "../logger/index.js";
 import { SERVICE_NAME } from "../version.js";
-import { findBinary } from "./detect.js";
+import { cloudflaredEnvironment, findBinary } from "./detect.js";
 import type { TunnelDoctorReport, TunnelProvider, TunnelStatus } from "./provider.js";
 import { tunnelProtocolArgs } from "./protocol.js";
 
@@ -26,14 +26,14 @@ async function bridgeHealth(
     redirect: "error",
     signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
   });
-  if (!response) return { ready: false, detail: "Health check did not run" };
+  if (!response) return { ready: false, detail: "稼働確認を実行できませんでした" };
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
-    return { ready: false, detail: `Health check returned HTTP ${response.status}` };
+    return { ready: false, detail: `稼働確認の応答: HTTP ${response.status}` };
   }
   return {
     ready: isBridgeHealth(await response.json().catch(() => null)),
-    detail: `Health check did not identify ${SERVICE_NAME}`,
+    detail: `稼働確認の応答が${SERVICE_NAME}ではありません`,
   };
 }
 
@@ -57,7 +57,7 @@ export interface CloudflaredQuickTunnelOptions {
   spawnImpl?: (
     command: string,
     args: string[],
-    options: { stdio: ["ignore", "pipe", "pipe"]; windowsHide: true }
+    options: { stdio: ["ignore", "pipe", "pipe"]; windowsHide: true; env: NodeJS.ProcessEnv }
   ) => ChildProcess;
   fetchImpl?: (input: string | URL, init?: RequestInit) => Promise<Response>;
 }
@@ -109,7 +109,7 @@ export class CloudflaredQuickTunnel implements TunnelProvider {
     if (!bin) {
       return Promise.reject(
         new Error(
-          "cloudflared is not installed. Install it (e.g. `brew install cloudflared`) and retry."
+          "cloudflaredがインストールされていません。`brew install cloudflared`などで導入してから再試行してください。"
         )
       );
     }
@@ -120,7 +120,7 @@ export class CloudflaredQuickTunnel implements TunnelProvider {
         child = this.spawnImpl(
           bin,
           ["tunnel", "--url", `http://127.0.0.1:${localPort}`, "--no-autoupdate", ...tunnelProtocolArgs()],
-          { stdio: ["ignore", "pipe", "pipe"], windowsHide: true }
+          { stdio: ["ignore", "pipe", "pipe"], windowsHide: true, env: cloudflaredEnvironment() }
         );
       } catch (error) {
         reject(error);
@@ -169,19 +169,19 @@ export class CloudflaredQuickTunnel implements TunnelProvider {
         });
       };
 
-      cancel = () => fail(new Error("Tunnel start stopped"));
+      cancel = () => fail(new Error("Tunnelの起動を停止しました"));
       this.cancelStart = cancel;
 
       const ready = (url: string): void => {
         if (!isAlive()) {
-          fail(new Error("cloudflared exited before the public health endpoint became ready"));
+          fail(new Error("公開稼働確認が準備できる前にcloudflaredが終了しました"));
           return;
         }
         finish(
           () => {
             this.url = url;
             this.lastError = null;
-            this.logger.info(`Quick tunnel established: ${url}`);
+            this.logger.info(`一時Tunnelを確立しました: ${url}`);
             resolve(url);
           },
           false
@@ -193,7 +193,7 @@ export class CloudflaredQuickTunnel implements TunnelProvider {
         if (!publicUrl) return;
         while (!settled) {
           if (!isAlive()) {
-            fail(new Error("cloudflared exited before the public health endpoint became ready"));
+            fail(new Error("公開稼働確認が準備できる前にcloudflaredが終了しました"));
             return;
           }
 
@@ -216,8 +216,8 @@ export class CloudflaredQuickTunnel implements TunnelProvider {
 
       timeout = setTimeout(() => {
         if (!settled) {
-          this.logger.error(`Quick tunnel did not become ready within ${this.startTimeoutMs}ms`);
-          fail(new Error("Tunnel start timed out"));
+          this.logger.error(`一時Tunnelが${this.startTimeoutMs}ms以内に準備完了しませんでした`);
+          fail(new Error("Tunnelの起動がタイムアウトしました"));
         }
       }, this.startTimeoutMs);
 
@@ -228,12 +228,12 @@ export class CloudflaredQuickTunnel implements TunnelProvider {
           if (url && !candidateUrl) {
             candidateUrl = url;
             void waitForHealth().catch((error) => {
-              this.logger.error(`Quick tunnel health check failed: ${String(error)}`);
+              this.logger.error(`一時Tunnelの稼働確認に失敗しました: ${String(error)}`);
             });
           }
           if (/\b(?:ERR|error|failed|fatal)\b/i.test(line)) {
-            this.lastError = line.slice(0, 400);
-            this.logger.debug(`cloudflared: ${line.slice(0, 400)}`);
+            this.lastError = "cloudflaredがエラーを報告しました";
+            this.logger.debug(this.lastError);
           }
         });
       };
@@ -253,13 +253,13 @@ export class CloudflaredQuickTunnel implements TunnelProvider {
         if (this.child === child) {
           this.child = null;
           this.url = null;
-          this.lastError = `cloudflared exited (code ${code})`;
+          this.lastError = `cloudflaredが終了しました（終了コード ${code}）`;
         }
-        this.logger.warn(`cloudflared exited with code ${code}`);
+        this.logger.warn(`cloudflaredが終了しました（終了コード ${code}）`);
         if (!settled) {
           fail(
             new Error(
-              `cloudflared exited (code ${code}) before establishing a tunnel${this.lastError ? `: ${this.lastError}` : ""}`
+              `Tunnel確立前にcloudflaredが終了しました（終了コード ${code}）${this.lastError ? `: ${this.lastError}` : ""}`
             )
           );
         }
@@ -302,9 +302,9 @@ export class CloudflaredQuickTunnel implements TunnelProvider {
   async doctor(): Promise<TunnelDoctorReport> {
     const bin = this.binary();
     const problems: string[] = [];
-    if (!bin) problems.push("cloudflared binary not found");
-    if (bin && !this.child) problems.push("tunnel process not running");
-    if (this.child && !this.url) problems.push("tunnel running but no public URL yet");
+    if (!bin) problems.push("cloudflared実行ファイルが見つかりません");
+    if (bin && !this.child) problems.push("Tunnelプロセスが停止しています");
+    if (this.child && !this.url) problems.push("Tunnelは起動していますが公開URLがまだありません");
     return {
       provider: this.name,
       binaryFound: bin !== null,

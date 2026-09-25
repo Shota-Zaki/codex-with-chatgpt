@@ -10,7 +10,7 @@ description: >
 
 # Codex with ChatGPT
 
-ChatGPT thinks. Codex works.
+ChatGPTが設計・レビューし、Codexが実装・実行する。
 
 Codex owns editing, shell, Git mutation, tests, build and recovery. ChatGPT owns
 reasoning, planning, review and debug strategy. The C2C Bridge gives ChatGPT a
@@ -331,8 +331,14 @@ Session-only checkpoint states may additionally include `INIT`,
 ```text
 [C2C]
 STATE: INIT
-TASK_ID: c2c_f81a
+TASK_ID: c2c_tdock_001
 ITERATION: 0
+
+TARGET_REPOSITORY:
+Template-Dock
+
+TARGET_PATH:
+Template-Dock/
 
 GOAL:
 <user goal>
@@ -364,11 +370,14 @@ c2c record -w <ws> --repository RepoB --task c2c_f81a --iteration 1 --changed-fi
 ```text
 [C2C]
 STATE: EXECUTED
-TASK_ID: c2c_f81a
+TASK_ID: c2c_tdock_001
 ITERATION: 1
 
+TARGET_REPOSITORY:
+Template-Dock
+
 RESULT:
-Execution finished.
+実装完了。
 
 REPOSITORIES:
 RepoA, RepoB

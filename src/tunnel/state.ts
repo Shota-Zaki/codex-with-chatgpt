@@ -2,7 +2,6 @@ import path from "node:path";
 import { getStateDir, readJsonIfExists, writeSecureJson } from "../config/paths.js";
 
 export type TunnelPreference = "unset" | "quick" | "named";
-
 export interface TunnelState {
   workspaceId: string;
   preference: TunnelPreference;
@@ -15,37 +14,19 @@ export interface TunnelState {
   configuredAt?: string;
   fallbackReason?: string;
 }
-
 export function tunnelStateFile(workspaceId: string): string {
   return path.join(getStateDir(), "tunnels", `${workspaceId}.json`);
 }
-
 export function readTunnelState(workspaceId: string): TunnelState {
-  return (
-    readJsonIfExists<TunnelState>(tunnelStateFile(workspaceId)) ?? {
-      workspaceId,
-      preference: "unset",
-    }
-  );
+  return readJsonIfExists<TunnelState>(tunnelStateFile(workspaceId)) ?? { workspaceId, preference: "unset" };
 }
-
 export function writeTunnelState(state: TunnelState): TunnelState {
-  writeSecureJson(tunnelStateFile(state.workspaceId), state);
-  return state;
+  writeSecureJson(tunnelStateFile(state.workspaceId), state); return state;
 }
-
-export function needsTunnelChoice(state: TunnelState): boolean {
-  return state.preference === "unset" || !state.askedAt;
-}
-
+export function needsTunnelChoice(state: TunnelState): boolean { return state.preference === "unset" || !state.askedAt; }
 export function isNamedTunnelReady(state: TunnelState): boolean {
-  return (
-    state.preference === "named" &&
-    Boolean(state.tunnelName?.trim()) &&
-    Boolean(state.hostname?.trim())
-  );
+  return state.preference === "named" && Boolean(state.tunnelName?.trim()) && Boolean(state.hostname?.trim());
 }
-
 export function namedTunnelBinding(state: TunnelState): { tunnelName: string; hostname: string } | null {
   if (!isNamedTunnelReady(state) || !state.tunnelName || !state.hostname) return null;
   return { tunnelName: state.tunnelName, hostname: state.hostname };

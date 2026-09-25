@@ -4,6 +4,22 @@ import path from "node:path";
 import readline from "node:readline";
 import { Workspace } from "./manager.js";
 
+const SEARCH_ENV_KEYS = [
+  "HOME", "USER", "LOGNAME", "PATH", "PATHEXT", "SYSTEMROOT", "SystemRoot", "WINDIR", "ComSpec",
+  "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "APPDATA", "TEMP", "TMP", "TMPDIR",
+  "LANG", "LC_ALL", "TZ",
+] as const;
+
+/** ripgrepへ親shellのAPIキー・token・Node注入設定を渡さない。 */
+export function searchEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const safe: NodeJS.ProcessEnv = {};
+  for (const key of SEARCH_ENV_KEYS) {
+    const value = env[key];
+    if (value !== undefined) safe[key] = value;
+  }
+  return safe;
+}
+
 export interface SearchOptions {
   query: string;
   path?: string;

@@ -88,10 +88,10 @@ describe("OAuth hardening", () => {
 
       expect(response.status).toBe(200);
       const html = await response.text();
-      expect(html).toContain("Read files in this workspace");
-      expect(html).not.toContain("Search this workspace");
-      expect(html).not.toContain("Read git status and diffs");
-      expect(html).not.toContain("Stay connected between sessions");
+      expect(html).toContain("このWorkspaceのファイルを読み取る");
+      expect(html).not.toContain("このWorkspaceを検索する");
+      expect(html).not.toContain("Git状態と差分を読み取る");
+      expect(html).not.toContain("セッションをまたいで接続を維持する");
     } finally {
       await bridge.close();
     }

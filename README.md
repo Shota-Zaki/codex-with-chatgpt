@@ -1,215 +1,221 @@
 # Codex with ChatGPT
 
-**English** | [日本語](README.ja.md)
+> ChatGPTが設計・レビューし、Codexが実装・実行するためのローカルBridgeです。
 
-> ChatGPT thinks. Codex works.
+このforkは、Mac miniを24時間開発ホストとして使う構成に合わせて、日本語化・送信先制御・外部ドライブ監視・常駐起動を追加しています。
 
-## The problem
+Repository: https://github.com/Shota-Zaki/codex-with-chatgpt<br>
+User Skill: `~/.agents/skills/codex-with-chatgpt/SKILL.md`
 
-You already pay for ChatGPT's web subscription. Its reasoning quota sits mostly
-idle while Codex burns scarce API tokens on planning and review. This project
-uses ChatGPT's web UI as the brain and Codex as the hands — no API key, no
-reverse proxy, just the official web app plus a read-only MCP bridge.
-
-## What this is
-
-Turn ChatGPT (web) into the planning and review brain for your Codex coding
-sessions while Codex keeps full execution ownership. Your repo is never
-uploaded — ChatGPT reads only the files it needs through a secure, OAuth-protected,
-**read-only** MCP connection to your local workspace.
-
-## One-prompt install (beginner-friendly)
-
-Don't know git, Node, or terminals? Copy this entire block into your coding
-agent (Codex):
+## 現在の運用構成
 
 ```text
-Please install and configure my hardened Codex with ChatGPT fork. Handle the
-technical work yourself:
+/Users/zaki/
+├── Developer   -> /Volumes/ZAKKO_DEV/repos
+├── Backups     -> /Volumes/ZAKKO_DEV/backups/previous
+└── Homelab/
+    └── codex-with-chatgpt/   # 常駐起動用設定
 
-1. Check prerequisites: git and Node.js >= 20. Install missing prerequisites
-   (Homebrew on macOS, winget on Windows) and install cloudflared if needed.
-2. Keep exactly one shared hardened checkout on this computer. If it does not
-   exist, clone https://github.com/Shota-Zaki/codex-with-chatgpt to
-   ~/codex-with-chatgpt. If it already exists, DO NOT pull or update it
-   automatically; keep using the current verified commit unless I explicitly
-   ask to update Codex with ChatGPT.
-3. Build from the lockfile: in that checkout run
-   corepack pnpm install --frozen-lockfile and corepack pnpm build.
-4. Install the user Skill: copy skill/SKILL.md to
-   ~/.agents/skills/codex-with-chatgpt/SKILL.md (Windows:
-   %USERPROFILE%\.agents\skills\codex-with-chatgpt\SKILL.md), then replace the
-   "checkout lives at:" placeholder with the actual shared checkout path.
-5. Follow the first-time setup workflow in SKILL.md for ONE repository only.
-   Never connect a parent directory that contains multiple repositories.
-6. Keep each repository's workspace, OAuth/token state, ChatGPT connector, and
-   ChatGPT Project separate. Never reuse one repository's credentials for another.
-7. Only interrupt me for login, CAPTCHA, 2FA, explicit consent, or the guided
-   ChatGPT setup choices defined by the Skill. Give me one action at a time.
-8. At the end, show the readiness checklist and confirm the file-read test.
+/Volumes/ZAKKO_DEV/
+├── repos/       # 統合開発Workspace
+├── archives/
+├── backups/
+├── cache/
+├── data/
+├── docker/
+└── ollama/
 ```
 
-**Updates:** the Skill may check whether a newer candidate exists, but it never
-updates automatically. It keeps using the current verified commit and only
-reports that an update is available. Apply an update only after an explicit
-request such as **"Codex with ChatGPTを更新して"**; the hardened update workflow
-refuses dirty checkouts and validates the candidate before fast-forwarding.
+C2CがChatGPTへ公開するWorkspaceは **`/Volumes/ZAKKO_DEV/repos`** です。<br>
+`data`、`docker`、`ollama`、`backups` などはWorkspace外のため、MCPから直接参照できません。
 
-## Install → setup → use (manual)
+各Repositoryの `.c2cignore` も継承されます。さらに、`.env`、秘密鍵、認証情報、SQLite/DBファイル、Docker認証設定などは共通ポリシーで読み取りを拒否します。
 
-1. Keep one shared checkout of this hardened fork on the computer.
-2. Copy `skill/SKILL.md` to `~/.agents/skills/codex-with-chatgpt/SKILL.md`
-   (Windows: `%USERPROFILE%\.agents\skills\codex-with-chatgpt\SKILL.md`) and set
-   its checkout path to that shared checkout.
-3. Tell Codex: **"Codex with ChatGPTを使って、このRepositoryの初回設定をして。"**
-4. After that: **"Codex with ChatGPTを使って、XXXを実装して。"**
+## 役割分担
 
-Do not copy the C2C checkout into each application repository. One repository
-must map to one workspace boundary; repositories must not share OAuth/token
-state or a ChatGPT Project.
+- **ChatGPT**: 設計、計画、レビュー、デバッグ方針
+- **Codex**: ファイル編集、shell、Git、テスト、実装
+- **C2C Bridge**: ChatGPTからWorkspaceを読み取るためのMCP接続
+- **Cloudflare Tunnel**: ChatGPTからMac mini上のBridgeへ到達する公開経路
 
-That's the whole manual. You do not need to understand MCP, OAuth, tunnels,
-ports, or localhost. Codex handles the setup and should only surface this:
+MCPツール自体は読み取り専用です。ChatGPTがファイル編集やshell実行を直接行うのではなく、Codexが実装担当として実行します。
 
-```
-Codex with ChatGPT
+## プライバシーと外部通信
 
-✓ Current project identified
-✓ Workspace Bridge started
-✓ Secure connection established
-✓ ChatGPT connected
-✓ File read test passed
+このforkでは、C2CのNode.jsプロセスからのHTTP通信を制限しています。
 
-Ready.
-```
+許可する通信は次のみです。
 
-The only steps that may need your hands: logging into ChatGPT (and Cloudflare if
-you choose a stable hostname). A **new repository** also asks you to create one
-ChatGPT Project (collection) for that repository, with project-only memory.
-Existing repositories keep their legacy long chat unless you explicitly migrate.
+1. `127.0.0.1` / `::1` へのローカル管理通信
+2. 設定済み固定Tunnelの `/health` への本文なしGET/HEAD
+3. Cloudflare Quick Tunnel使用時の `*.trycloudflare.com/health` への本文なしGET/HEAD
 
-### Optional stable hostname
+公開health確認では、Authorization、Cookie、APIキー等を引き継がず、`credentials: omit`・`no-referrer`・redirect拒否で送信します。
 
-The default public address is temporary and changes when the bridge restarts.
-Codex then replaces only that repository's ChatGPT connector with the same
-connector name and the new address.
+その他の外部HTTP通信は `C2C_EGRESS_DENIED` として拒否します。C2Cの自動更新確認も停止しているため、通常起動時にGitHubへ更新照会しません。
 
-If you have a Cloudflare account and a domain already on Cloudflare, first-time
-setup can offer a stable hostname such as `c2c-<project>.example.com`. If you do
-not have an account, do not want one, or login fails, the temporary address
-continues to work.
+### この制御の範囲
 
-Credentials stay in the C2C user-state directory, never in the application repo.
+この制御は **C2CのNode.js `fetch` 経路**を対象にします。以下は別プロセス・別経路です。
 
-## How it works
+- `cloudflared` がCloudflareへ行うTunnel通信（親shellのAPIキー等は継承せず、OS実行に必要な環境変数だけを渡します）
+- ChatGPT/OpenAI側のConnector通信
+- ユーザーまたはCodexが明示的に実行する `git fetch/pull/push`
+- package managerが明示的な導入時に行う通信
 
-```
-             ┌───────────────────────────┐
-             │       ChatGPT Web         │
-             │   Reason / Plan / Review  │
-             └──────────┬──────────▲─────┘
-                        │          │
-               MCP      │          │ In-app browser
-              data plane│          │ control plane (<1 KB)
-                        ▼          │
-             ┌─────────────────────┐
-             │      C2C Bridge     │   loopback-only listener
-             │  read-only MCP      │   OAuth 2.1 + one-time pairing
-             │  OAuth + pairing    │   Cloudflare tunnel
-             │  tunnel management  │
-             └──────────┬──────────┘
-                        │  read-only
-                        ▼
-             ┌─────────────────────┐          ┌─────────────────────┐
-             │   Local workspace   │◀─────────│    Codex Harness    │
-             └─────────────────────┘ edit/git │ Shell / Test / Fix  │
-                                              └─────────────────────┘
-```
+したがって「元開発者のサーバーへ自動送信する処理を許可しない」ことと、「一切の外部通信をしない」ことは別です。
 
-- **Control plane (in-app browser):** Codex and ChatGPT exchange tiny structured
-  `[C2C]` state messages — `INIT → PLAN → EXECUTED → REVIEW → DONE`. They do not
-  paste diffs, logs, or file bodies into the chat.
-- **Data plane (MCP):** ChatGPT pulls what it needs through nine read-only tools:
-  `workspace_info`, `list_directory`, `read_file`, `search_workspace`,
-  `git_status`, `git_diff`, `test_status`, `execution_summary`, and
-  `execution_output`.
-- **Independent review:** after Codex executes, ChatGPT reads the real git diff
-  and released test/build output through MCP instead of trusting a claim that
-  "tests passed."
+## 初回セットアップ
 
-## Hardened security model (short version)
+前提:
 
-- **Read-only by construction:** the MCP server exposes no write, delete, shell,
-  execute, commit, package-install, or arbitrary-network tool.
-- **One repository = one boundary:** each repository gets its own workspace,
-  OAuth/token state, connector, and ChatGPT Project. Do not use a multi-repo
-  parent directory as one workspace.
-- **Fail-closed scopes:** unsupported OAuth scopes are rejected; a supported
-  subset stays least-privilege.
-- **Bounded public registration:** OAuth client registrations, redirect URIs,
-  pending authorization requests, and registration attempts are bounded.
-- **Anonymous public health:** `/health` exposes only service + status. Local
-  workspace identity is read through an admin-token-protected loopback endpoint.
-- **Sensitive paths stay blocked:** `.env*`, key material, SSH/cloud credentials,
-  Docker/Kubernetes configs, Terraform state/vars and similar files are denied
-  (`.env.example` remains readable).
-- **Shared outbound secret boundary:** file reads, search matches, git diffs and
-  execution output are redacted for common credentials. Private-key blocks fail
-  closed and are not returned.
-- **Path confinement:** canonical realpath checks block absolute-path, `../`, and
-  symlink escapes.
-- **Token isolation:** no token → 401; a token for another workspace → 403;
-  refresh tokens rotate and persisted tokens are hash-only.
-- **No unattended self-update:** normal update checks only report a candidate.
-  Explicit updates refuse dirty checkouts and validate the candidate first.
-
-Full threat model: [docs/security.md](docs/security.md)
-
-## Development
+- Node.js 20以上
+- pnpm
+- git
+- cloudflared
+- 固定ドメインを使う場合はCloudflareアカウントと管理中ドメイン
 
 ```bash
 corepack pnpm install --frozen-lockfile
-corepack pnpm build
-corepack pnpm test
 corepack pnpm typecheck
-
-c2c setup           # bridge + public connection + pairing code
-c2c sandbox-allow   # allow the C2C local state dir in the Codex sandbox
-c2c status / doctor / pair / unpair / logs / stop
+corepack pnpm test
+corepack pnpm build
 ```
 
-Requirements: Node.js >= 20, git; public connectivity requires `cloudflared`.
+初回設定:
 
-Docs: [architecture](docs/architecture.md) · [protocol](docs/protocol.md) ·
-[security](docs/security.md) · [troubleshooting](docs/troubleshooting.md)
-
-## Repository layout
-
-```
-src/
-  bridge/     loopback HTTP service, port recovery, admin API
-  mcp/        nine read-only tools, stateless Streamable HTTP
-  auth/       OAuth 2.1 (PKCE, registration, refresh rotation, revocation)
-  pairing/    one-time pairing code (CSPRNG, TTL, rate limit)
-  workspace/  path confinement, sensitive-file policy, search, git
-  tunnel/     TunnelProvider abstraction + Cloudflare tunnel implementations
-  execution/  execution records used by the review loop
-  process/    daemon lifecycle
-  cli/        c2c command line
-skill/        Codex Skill (the UX layer)
-tests/        unit + integration tests
-docs/         architecture / protocol / security / troubleshooting
+```bash
+node bin/c2c.js setup -w /Volumes/ZAKKO_DEV/repos --tunnel
 ```
 
-## Status and verification
+状態確認:
 
-This repository is a hardened fork. Do not treat a hardening branch or commit as
-verified merely because the code was changed. Before deployment, pin a candidate
-commit and run the required frozen install, test, typecheck, and build checks on
-that exact commit. Merge to `main` only after those checks and review succeed.
+```bash
+node bin/c2c.js status -w /Volumes/ZAKKO_DEV/repos
+node bin/c2c.js doctor -w /Volumes/ZAKKO_DEV/repos
+```
 
-**Unofficial community project. Not affiliated with or endorsed by OpenAI.**
+固定ドメインを使用する場合:
 
-## License
+```bash
+node bin/c2c.js tunnel choose \
+  -w /Volumes/ZAKKO_DEV/repos \
+  --mode named \
+  --zone zakkolab.com \
+  --hostname c2c-mac-mini-control-center.zakkolab.com
+```
 
-[MIT](LICENSE)
+## Mac mini 24時間常駐
+
+現在の常駐処理は固定Tunnelを前提にしています。
+
+まず構成だけ確認します。この操作では設定変更・起動・通信を行いません。
+
+```bash
+corepack pnpm mac:plan
+```
+
+テストとbuild完了後、常駐設定を生成します。
+
+```bash
+node scripts/macos-service.mjs prepare
+```
+
+生成先:
+
+```text
+/Users/zaki/Homelab/codex-with-chatgpt/
+├── service.json
+├── service-common.mjs
+├── macos-supervisor.mjs
+└── com.zakkolab.codex-with-chatgpt.system.plist
+```
+
+常駐処理は次を確認してからBridgeを起動します。
+
+- `ZAKKO_DEV` のVolume UUIDが一致
+- mount pointが `/Volumes/ZAKKO_DEV`
+- Workspace実体が `/Volumes/ZAKKO_DEV/repos`
+- 対象RepositoryがWorkspace内部
+- build済みの `dist/` が存在
+- 固定Tunnel設定が正常
+- 同一サービスが重複起動していない
+
+外部ドライブが未接続なら起動せず待機し、外れた場合はworkerを終了して再接続を待ちます。短時間の異常終了は指数バックオフで再試行し、最大5分まで間隔を伸ばします。
+
+## 起動方式
+
+### LaunchAgent
+
+ログイン中だけ動かす場合:
+
+```bash
+node scripts/macos-service.mjs install-agent
+node scripts/macos-service.mjs start-agent
+```
+
+停止:
+
+```bash
+node scripts/macos-service.mjs stop-agent
+```
+
+### LaunchDaemon
+
+ログアウト後も24時間動かす場合は、`prepare` で生成された
+
+```text
+/Users/zaki/Homelab/codex-with-chatgpt/com.zakkolab.codex-with-chatgpt.system.plist
+```
+
+を内容確認後にsystem LaunchDaemonとして登録します。
+
+このRepositoryからはroot権限操作を自動実行しません。
+
+## 主なコマンド
+
+| コマンド | 用途 |
+| --- | --- |
+| `c2c start` | Bridgeを起動 |
+| `c2c stop` | Bridgeを停止 |
+| `c2c restart` | Bridgeを再起動 |
+| `c2c status` | 状態確認 |
+| `c2c doctor` | 診断・可能な範囲の修復 |
+| `c2c pair` | 新しいペアリングコードを発行 |
+| `c2c unpair` | ChatGPTアクセスを失効 |
+| `c2c logs` | Bridgeログ表示 |
+| `c2c workspace` | Workspace情報表示 |
+| `c2c tunnel status` | Tunnel設定確認 |
+| `c2c update-check` | 外部照会せず「未確認」を返す |
+
+## 開発時の検証
+
+```bash
+corepack pnpm typecheck
+corepack pnpm test
+corepack pnpm test:runtime
+corepack pnpm build
+```
+
+`tests/runtime/` には、外部送信制御とMac常駐処理をNode標準テストで独立検証するテストがあります。
+
+## ドキュメント
+
+- [アーキテクチャ](docs/architecture.md)
+- [C2Cプロトコル](docs/protocol.md)
+- [セキュリティモデル](docs/security.md)
+- [トラブルシューティング](docs/troubleshooting.md)
+- [Codex Skill](skill/SKILL.md)
+
+## 開発Branch
+
+- `work`: 開発・検証
+- `main`: 公開用
+
+検証が完了するまで `main` へ反映しません。
+
+## ライセンス
+
+MIT License。詳細は [LICENSE](LICENSE) を参照してください。
+
+このforkを含むCodex with ChatGPTは、OpenAI公式プロジェクトではありません。

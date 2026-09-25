@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "../runtime/bootstrap.mjs";
 import { createHash } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";

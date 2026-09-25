@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import type { ChildProcess } from "node:child_process";
 import { PassThrough } from "node:stream";
-import { findBinary } from "../src/tunnel/detect.js";
+import { cloudflaredEnvironment, findBinary } from "../src/tunnel/detect.js";
 import {
   CloudflaredQuickTunnel,
   parseQuickTunnelUrl,
@@ -19,6 +19,7 @@ import {
   provisionNamedTunnel,
   type CloudflaredAccount,
 } from "../src/tunnel/named-provision.js";
+import { resolveTunnelProtocol, tunnelProtocolArgs } from "../src/tunnel/protocol.js";
 import { isNamedTunnelReady, needsTunnelChoice, readTunnelState } from "../src/tunnel/state.js";
 import { cleanup, isolateStateDir, makeTmpDir, write } from "./helpers.js";
 
@@ -67,6 +68,27 @@ afterEach(() => {
   else process.env.C2C_CLOUDFLARED_PATH = previousCloudflaredPath;
 });
 
+describe("cloudflaredEnvironment", () => {
+  it("OS設定だけを継承しAPIキーやGitHubトークンを除外する", () => {
+    const env = cloudflaredEnvironment({
+      HOME: "/Users/test",
+      PATH: "/usr/bin:/bin",
+      TUNNEL_ORIGIN_CERT: "/Users/test/.cloudflared/cert.pem",
+      OPENAI_API_KEY: "secret",
+      GITHUB_TOKEN: "secret",
+      CLOUDFLARE_API_TOKEN: "secret",
+      NODE_OPTIONS: "--require /tmp/evil.cjs",
+    });
+    expect(env.HOME).toBe("/Users/test");
+    expect(env.PATH).toBe("/usr/bin:/bin");
+    expect(env.TUNNEL_ORIGIN_CERT).toBe("/Users/test/.cloudflared/cert.pem");
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+    expect(env.GITHUB_TOKEN).toBeUndefined();
+    expect(env.CLOUDFLARE_API_TOKEN).toBeUndefined();
+    expect(env.NODE_OPTIONS).toBeUndefined();
+  });
+});
+
 describe("findBinary", () => {
   it("uses C2C_CLOUDFLARED_PATH for an accessible cloudflared executable", () => {
     const dir = makeTmpDir("cloudflared-path");
@@ -108,7 +130,7 @@ describe("CloudflaredQuickTunnel", () => {
     expect(spawnImpl).toHaveBeenCalledWith(
       "cloudflared",
       ["tunnel", "--url", "http://127.0.0.1:3333", "--no-autoupdate"],
-      { stdio: ["ignore", "pipe", "pipe"], windowsHide: true }
+      expect.objectContaining({ stdio: ["ignore", "pipe", "pipe"], windowsHide: true, env: expect.any(Object) })
     );
     expect(fetchImpl).toHaveBeenCalledWith(`${QUICK_URL}/health`, {
       redirect: "error",
@@ -116,6 +138,21 @@ describe("CloudflaredQuickTunnel", () => {
     });
     expect(tunnel.status()).toMatchObject({ running: true, url: QUICK_URL });
     await tunnel.stop();
+  });
+
+  it("passes --protocol when C2C_TUNNEL_PROTOCOL is set", async () => {
+    vi.stubEnv("C2C_TUNNEL_PROTOCOL", "http2");
+    const { child, spawnImpl, tunnel } = setupTunnel(async () => healthResponse());
+    const starting = tunnel.start(3333);
+    announceUrl(child);
+    await expect(starting).resolves.toBe(QUICK_URL);
+    expect(spawnImpl).toHaveBeenCalledWith(
+      "cloudflared",
+      ["tunnel", "--url", "http://127.0.0.1:3333", "--no-autoupdate", "--protocol", "http2"],
+      expect.objectContaining({ stdio: ["ignore", "pipe", "pipe"], windowsHide: true, env: expect.any(Object) })
+    );
+    await tunnel.stop();
+    vi.unstubAllEnvs();
   });
 
   it("keeps consuming cloudflared errors after the tunnel is ready", async () => {
@@ -126,7 +163,7 @@ describe("CloudflaredQuickTunnel", () => {
 
     child.stderr.write("ERR runtime connection error\n");
     await new Promise((resolve) => setImmediate(resolve));
-    expect(tunnel.status().detail).toBe("ERR runtime connection error");
+    expect(tunnel.status().detail).toBe("cloudflaredがエラーを報告しました");
     await tunnel.stop();
   });
 
@@ -139,7 +176,7 @@ describe("CloudflaredQuickTunnel", () => {
     const starting = tunnel.start(3333);
     announceUrl(child);
 
-    await expect(starting).rejects.toThrow(/timed out/i);
+    await expect(starting).rejects.toThrow(/タイムアウト/);
     expect(child.kill).toHaveBeenCalledWith("SIGTERM");
     expect(tunnel.status()).toMatchObject({ running: false, url: null });
   });
@@ -152,8 +189,8 @@ describe("CloudflaredQuickTunnel", () => {
 
     const concurrent = tunnel.start(3333);
     await tunnel.stop();
-    await expect(starting).rejects.toThrow(/stopped/i);
-    await expect(concurrent).rejects.toThrow(/stopped/i);
+    await expect(starting).rejects.toThrow(/停止/);
+    await expect(concurrent).rejects.toThrow(/停止/);
     expect(spawnImpl).toHaveBeenCalledTimes(1);
     expect(child.kill).toHaveBeenCalledWith("SIGTERM");
   });
@@ -170,7 +207,7 @@ describe("CloudflaredQuickTunnel", () => {
     child.exitCode = 1;
     child.emit("exit", 1, null);
     resolveFetch(healthResponse());
-    await expect(starting).rejects.toThrow(/exited/i);
+    await expect(starting).rejects.toThrow(/終了/);
     expect(tunnel.status()).toMatchObject({ running: false, url: null });
   });
 
@@ -203,14 +240,35 @@ describe("CloudflaredQuickTunnel", () => {
   });
 });
 
+describe("tunnel transport protocol", () => {
+  it("keeps cloudflared's default when C2C_TUNNEL_PROTOCOL is unset or empty", () => {
+    expect(resolveTunnelProtocol({})).toBeNull();
+    expect(resolveTunnelProtocol({ C2C_TUNNEL_PROTOCOL: "  " })).toBeNull();
+    expect(tunnelProtocolArgs(null)).toEqual([]);
+  });
+
+  it("accepts the cloudflared protocol names case-insensitively", () => {
+    expect(resolveTunnelProtocol({ C2C_TUNNEL_PROTOCOL: "HTTP2" })).toBe("http2");
+    expect(resolveTunnelProtocol({ C2C_TUNNEL_PROTOCOL: " quic " })).toBe("quic");
+    expect(resolveTunnelProtocol({ C2C_TUNNEL_PROTOCOL: "auto" })).toBe("auto");
+    expect(tunnelProtocolArgs("http2")).toEqual(["--protocol", "http2"]);
+  });
+
+  it("rejects unknown protocols instead of silently falling back", () => {
+    expect(() => resolveTunnelProtocol({ C2C_TUNNEL_PROTOCOL: "tcp" })).toThrow(
+      /C2C_TUNNEL_PROTOCOLには次のいずれかを指定してください/
+    );
+  });
+});
+
 describe("normalizeNamedTunnelHostname", () => {
   it("normalizes a valid hostname", () => {
     expect(normalizeNamedTunnelHostname("Dev.GetRemi.xyz.")).toBe("dev.getremi.xyz");
   });
 
   it("rejects URLs and invalid hostnames", () => {
-    expect(() => normalizeNamedTunnelHostname("https://dev.getremi.xyz")).toThrow(/invalid/i);
-    expect(() => normalizeNamedTunnelHostname("localhost")).toThrow(/invalid/i);
+    expect(() => normalizeNamedTunnelHostname("https://dev.getremi.xyz")).toThrow(/無効/);
+    expect(() => normalizeNamedTunnelHostname("localhost")).toThrow(/無効/);
   });
 });
 

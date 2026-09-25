@@ -1,8 +1,6 @@
 import { Command, InvalidArgumentError } from "commander";
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { startBridge } from "../bridge/server.js";
 import { findBridgeObservation, findLiveBridge, type RuntimeState } from "../bridge/runtime.js";
 import { adminFetch, ensureBridge, stopBridge } from "../process/daemon.js";
@@ -72,16 +70,16 @@ function resolveWorkspace(option?: string): string {
 function parseInteger(value: string): number {
   const normalized = value.trim();
   if (!/^-?\d+$/.test(normalized)) {
-    throw new InvalidArgumentError("must be an integer");
+    throw new InvalidArgumentError("整数を指定してください");
   }
   const parsed = Number(normalized);
-  if (!Number.isSafeInteger(parsed)) throw new InvalidArgumentError("must be a safe integer");
+  if (!Number.isSafeInteger(parsed)) throw new InvalidArgumentError("安全な範囲の整数を指定してください");
   return parsed;
 }
 
 function parseNonNegativeInteger(value: string): number {
   const parsed = parseInteger(value);
-  if (parsed < 0) throw new InvalidArgumentError("must be a non-negative integer");
+  if (parsed < 0) throw new InvalidArgumentError("0以上の整数を指定してください");
   return parsed;
 }
 
@@ -90,7 +88,7 @@ function parseChangedFiles(value: string): string[] | number {
   if (/^-?\d+$/.test(normalized)) {
     const count = parseInteger(normalized);
     if (count < 0) {
-      throw new InvalidArgumentError("changed-files count must be a non-negative safe integer");
+      throw new InvalidArgumentError("changed-filesの件数には0以上の安全な範囲の整数を指定してください");
     }
     return count;
   }
@@ -200,11 +198,11 @@ async function ensureBridgeAndTunnel(
     const binaries = detectTunnelBinaries();
     if (!binaries.cloudflared) {
       throw new Error(
-        "NEED_CLOUDFLARED: cloudflared is not installed. Install it first (macOS: brew install cloudflared)."
+        "NEED_CLOUDFLARED: cloudflaredがインストールされていません。先に導入してください（macOS: brew install cloudflared）。"
       );
     }
     const result = await adminFetch<TunnelStartResponse>(runtime, "POST", "/admin/tunnel/start", 90_000);
-    if (!result.url) throw new Error(result.message ?? "Tunnel start failed");
+    if (!result.url) throw new Error(result.message ?? "トンネルの起動に失敗しました");
     info = await adminFetch<AdminInfo>(runtime, "GET", "/admin/info");
     mcpUrl = `${result.url}/mcp`;
   }
@@ -213,17 +211,22 @@ async function ensureBridgeAndTunnel(
 
 program
   .name("c2c")
-  .description(`${PRODUCT_NAME} — ChatGPT thinks. Codex works.`)
+  .description(`${PRODUCT_NAME} — ChatGPTが考え、Codexが実行します。`)
   .version(VERSION, "-v, --version")
   .configureHelp({ sortSubcommands: true });
+
+/** Machine-wide commands ignore `-w` so a Skill that always passes it cannot crash them. */
+function acceptUnusedWorkspaceOption(command: Command): Command {
+  return command.option("-w, --workspace <path>", "このコマンドは端末全体が対象のためworkspace指定は使用しません");
+}
 
 // ---------------------------------------------------------------- serve (internal)
 
 program
   .command("serve", { hidden: true })
-  .description("Run the bridge in the foreground (internal)")
+  .description("Bridgeをフォアグラウンドで起動します（内部用）")
   .requiredOption("--workspace <path>")
-  .option("--port <port>", "preferred port")
+  .option("--port <port>", "優先して使用するポート")
   .action(async (opts: { workspace: string; port?: string }) => {
     const logger = new Logger({ name: "bridge", console: true });
     const bridge = await startBridge({
@@ -236,17 +239,17 @@ program
     };
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
-    say(`bridge ready on ${bridge.localBaseUrl()} (workspace ${bridge.workspace.name})`);
+    say(`Bridgeを起動しました：${bridge.localBaseUrl()}（Workspace ${bridge.workspace.name}）`);
   });
 
 // ---------------------------------------------------------------- start
 
 program
   .command("start")
-  .description("Start (or reuse) the bridge for this workspace")
-  .option("-w, --workspace <path>", "workspace root (defaults to current directory)")
-  .option("--tunnel", "also establish the secure public connection", false)
-  .option("--json", "machine-readable output", false)
+  .description("このWorkspaceのBridgeを起動または再利用します")
+  .option("-w, --workspace <path>", "Workspaceのルート（省略時は現在のディレクトリ）")
+  .option("--tunnel", "安全な公開接続も確立します", false)
+  .option("--json", "機械処理用JSONを出力します", false)
   .action(async (opts: { workspace?: string; tunnel: boolean; json: boolean }) => {
     const root = resolveWorkspace(opts.workspace);
     try {
@@ -276,10 +279,10 @@ program
 
 program
   .command("setup")
-  .description("First-time setup: bridge + secure connection + pairing code")
+  .description("初回設定：Bridge・安全な接続・ペアリングコードを準備します")
   .option("-w, --workspace <path>")
-  .option("--no-tunnel", "local-only setup (development)")
-  .option("--json", "machine-readable output", false)
+  .option("--no-tunnel", "ローカルのみで設定します（開発用）")
+  .option("--json", "機械処理用JSONを出力します", false)
   .action(async (opts: { workspace?: string; tunnel: boolean; json: boolean }) => {
     const root = resolveWorkspace(opts.workspace);
     try {
@@ -346,7 +349,7 @@ program
 
 program
   .command("stop")
-  .description("Stop the bridge for this workspace")
+  .description("このWorkspaceのBridgeを停止します")
   .option("-w, --workspace <path>")
   .action(async (opts: { workspace?: string }) => {
     const stopped = await stopBridge(resolveWorkspace(opts.workspace));
@@ -356,9 +359,9 @@ program
 
 program
   .command("restart")
-  .description("Restart the bridge for this workspace")
+  .description("このWorkspaceのBridgeを再起動します")
   .option("-w, --workspace <path>")
-  .option("--tunnel", "re-establish the secure public connection", false)
+  .option("--tunnel", "安全な公開接続も再確立します", false)
   .action(async (opts: { workspace?: string; tunnel: boolean }) => {
     const root = resolveWorkspace(opts.workspace);
     await stopBridge(root);
@@ -376,9 +379,9 @@ program
 
 program
   .command("status")
-  .description("Show bridge status for this workspace")
+  .description("このWorkspaceのBridge状態を表示します")
   .option("-w, --workspace <path>")
-  .option("--json", "machine-readable output", false)
+  .option("--json", "機械処理用JSONを出力します", false)
   .action(async (opts: { workspace?: string; json: boolean }) => {
     const root = resolveWorkspace(opts.workspace);
     const workspace = new Workspace(root);
@@ -415,10 +418,10 @@ program
 
 program
   .command("doctor")
-  .description("Diagnose and auto-repair the connection")
+  .description("接続状態を診断し、可能な範囲を自動修復します")
   .option("-w, --workspace <path>")
-  .option("--no-fix", "diagnose only, do not repair")
-  .option("--json", "machine-readable output", false)
+  .option("--no-fix", "診断のみ実行し、修復しません")
+  .option("--json", "機械処理用JSONを出力します", false)
   .action(async (opts: { workspace?: string; fix: boolean; json: boolean }) => {
     const root = resolveWorkspace(opts.workspace);
     const report: Record<string, { ok: boolean; detail?: string }> = {};
@@ -646,7 +649,7 @@ program
       say(JSON.stringify({ report, repairs: results, chatgptRepair, namedRepair }));
       return;
     }
-    say(`${PRODUCT_NAME} Doctor`);
+    say(`${PRODUCT_NAME} 診断`);
     say("");
     const labels: Record<string, string> = {
       node: "Node.js",
@@ -679,7 +682,7 @@ program
     }
     say(
       allOk && !chatgptRepair.needed && !namedRepair.needed
-        ? "Everything looks good."
+        ? "問題は見つかりませんでした。"
         : chatgptRepair.needed
           ? "ローカル側の準備は完了しています。ChatGPTで対象コネクタを削除し、再追加する必要があります。"
           : namedRepair.needed
@@ -693,9 +696,9 @@ program
 
 program
   .command("pair")
-  .description("Generate a fresh pairing code")
+  .description("新しいペアリングコードを発行します")
   .option("-w, --workspace <path>")
-  .option("--json", "machine-readable output", false)
+  .option("--json", "機械処理用JSONを出力します", false)
   .action(async (opts: { workspace?: string; json: boolean }) => {
     try {
       const { runtime } = await ensureBridge(resolveWorkspace(opts.workspace));
@@ -712,7 +715,7 @@ program
 
 program
   .command("unpair")
-  .description("Revoke ChatGPT's access to this workspace immediately")
+  .description("このWorkspaceへのChatGPTアクセスを直ちに無効化します")
   .option("-w, --workspace <path>")
   .action(async (opts: { workspace?: string }) => {
     const root = resolveWorkspace(opts.workspace);
@@ -731,10 +734,10 @@ program
 
 program
   .command("logs")
-  .description("Show recent bridge logs")
+  .description("最近のBridgeログを表示します")
   .option("-w, --workspace <path>")
-  .option("-n, --lines <n>", "number of lines", "50")
-  .option("--verbose", "include debug detail", false)
+  .option("-n, --lines <n>", "表示する行数", "50")
+  .option("--verbose", "デバッグ詳細を含めます", false)
   .action((opts: { workspace?: string; lines: string; verbose: boolean }) => {
     const workspace = new Workspace(resolveWorkspace(opts.workspace));
     const candidates = [
@@ -754,9 +757,9 @@ program
 
 program
   .command("workspace")
-  .description("Show workspace identity and project info")
+  .description("Workspace識別情報とプロジェクト情報を表示します")
   .option("-w, --workspace <path>")
-  .option("--json", "machine-readable output", false)
+  .option("--json", "機械処理用JSONを出力します", false)
   .action((opts: { workspace?: string; json: boolean }) => {
     const workspace = new Workspace(resolveWorkspace(opts.workspace));
     const project = workspace.detectProject();
@@ -771,10 +774,12 @@ program
 
 // ---------------------------------------------------------------- sandbox-allow (Codex writable_roots, macOS + Windows)
 
-program
-  .command("sandbox-allow")
-  .description("Add the local settings directory to the Codex sandbox allowlist")
-  .option("--json", "machine-readable output", false)
+acceptUnusedWorkspaceOption(
+  program
+    .command("sandbox-allow")
+    .description("ローカル設定ディレクトリをCodexサンドボックスの許可設定へ追加します")
+    .option("--json", "機械処理用JSONを出力します", false)
+)
   .action((opts: { json: boolean }) => {
     const result = trySandboxAllow();
     if (opts.json) {
@@ -791,79 +796,34 @@ program
     else check("ローカル設定ディレクトリをCodex sandboxの許可リストへ追加しました（以後の会話で追加権限は不要です）");
   });
 
-// ---------------------------------------------------------------- update-check (once per local day)
+// ---------------------------------------------------------------- update-check（外部照会なし）
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-
-function runGit(args: string[]): { ok: boolean; stdout: string } {
-  const result = spawnSync("git", args, {
-    cwd: repoRoot,
-    encoding: "utf8",
-    timeout: 8000,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
-    windowsHide: true,
-  });
-  return { ok: result.status === 0, stdout: (result.stdout ?? "").trim() };
-}
-
-program
+acceptUnusedWorkspaceOption(
+  program
   .command("update-check")
-  .description("Check GitHub for a newer version (real check at most once per local day)")
-  .option("--force", "check even if already checked today", false)
-  .option("--json", "machine-readable output", false)
-  .action((opts: { force: boolean; json: boolean }) => {
-    const file = path.join(getStateDir(), "update-check.json");
-    const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local tz
-    let last: { date?: string; updateAvailable?: boolean } = {};
-    try {
-      last = JSON.parse(fs.readFileSync(file, "utf8")) as typeof last;
-    } catch {
-      /* first run */
+  .description("外部照会を行わず、更新状況を未確認として表示します")
+  .option("--json", "機械処理用JSONを出力します", false)
+)
+  .action((opts: { json: boolean }) => {
+    const note = "プライバシー設定により自動更新確認を停止しています。更新状況は未確認です。";
+    if (opts.json) {
+      say(JSON.stringify({ ok: true, version: VERSION, checked: false, updateAvailable: false, disabled: true, note }));
+    } else {
+      say(note);
     }
-
-    const emit = (data: {
-      checked: boolean;
-      updateAvailable: boolean;
-      localCommit?: string;
-      remoteCommit?: string;
-      note?: string;
-    }): void => {
-      if (opts.json) say(JSON.stringify({ ok: true, version: VERSION, ...data }));
-      else if (data.updateAvailable) say(`新しいバージョンがあります（ローカル ${data.localCommit?.slice(0, 7)} → リモート ${data.remoteCommit?.slice(0, 7)}）。`);
-      else say(data.note ?? "最新バージョンです。");
-    };
-
-    if (!opts.force && last.date === today) {
-      emit({ checked: false, updateAvailable: last.updateAvailable ?? false, note: "本日はすでに更新を確認済みです。" });
-      return;
-    }
-
-    const local = runGit(["rev-parse", "HEAD"]);
-    const remote = runGit(["ls-remote", "origin", "HEAD"]);
-    if (!local.ok || !remote.ok || !remote.stdout) {
-      // Offline or not a git checkout: skip quietly and retry tomorrow-ish (do not
-      // record the date so a transient failure does not suppress the daily check).
-      emit({ checked: false, updateAvailable: false, note: "更新を確認できませんでした（オフライン、またはgit checkoutではありません）。今回はスキップします。" });
-      return;
-    }
-    const remoteCommit = remote.stdout.split(/\s/)[0];
-    const updateAvailable = remoteCommit !== local.stdout;
-    fs.mkdirSync(getStateDir(), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ date: today, updateAvailable, remoteCommit }), { mode: 0o600 });
-    emit({ checked: true, updateAvailable, localCommit: local.stdout, remoteCommit });
   });
 
 // ---------------------------------------------------------------- session (ChatGPT conversation / Project memory)
 
 const session = program
   .command("session")
-  .description("Remember the ChatGPT Project and conversation for this workspace");
+  .description("このWorkspaceのChatGPT Projectと会話情報を保存します");
 
 session
   .command("get", { isDefault: true })
-  .description("Show the saved ChatGPT conversation / Project for this workspace")
+  .description("保存済みのChatGPT会話・Project情報を表示します")
   .option("-w, --workspace <path>")
-  .option("--json", "machine-readable output", false)
+  .option("--json", "機械処理用JSONを出力します", false)
   .action((opts: { workspace?: string; json: boolean }) => {
     const workspace = new Workspace(resolveWorkspace(opts.workspace));
     const saved = readSession(workspace.id);
@@ -888,23 +848,23 @@ session
 
 session
   .command("set")
-  .description("Save the ChatGPT Project and/or conversation for this workspace")
+  .description("このWorkspaceのChatGPT Project・会話情報を保存します")
   .option("-w, --workspace <path>")
-  .option("--url <url>", "ChatGPT conversation URL from the address bar")
+  .option("--url <url>", "アドレスバーのChatGPT会話URL")
   .option("--title <title>")
   .option("--task <id>")
   .option("--iteration <n>")
-  .option("--state <state>", "last protocol state, e.g. EXECUTED")
-  .option("--mode <mode>", "long-chat or project")
-  .option("--project-url <url>", "ChatGPT Project collection URL (…/g/g-p-…/project)")
-  .option("--connector-name <name>", "exact connector title for this workspace")
-  .option("--protocol-state <state>", "checkpoint protocol state, e.g. EXECUTED_SENT")
+  .option("--state <state>", "直前のプロトコル状態（例: EXECUTED）")
+  .option("--mode <mode>", "long-chat または project")
+  .option("--project-url <url>", "ChatGPT Project URL（…/g/g-p-…/project）")
+  .option("--connector-name <name>", "このWorkspaceの正確なコネクター名")
+  .option("--protocol-state <state>", "チェックポイントのプロトコル状態（例: EXECUTED_SENT）")
   .option("--waiting-for <who>", "none | GPT_PLAN | GPT_REVIEW | USER")
-  .option("--goal <text>", "original task goal for resume / HANDOFF")
+  .option("--goal <text>", "再開・引継ぎ用の元タスク目標")
   .option("--completed-subtasks <text>")
   .option("--known-issues <text>")
   .option("--next-step <text>")
-  .option("--clear-checkpoint", "drop the active checkpoint (task DONE)", false)
+  .option("--clear-checkpoint", "アクティブなチェックポイントを消去します（タスク完了）", false)
   .action(
     (opts: {
       workspace?: string;
@@ -927,11 +887,11 @@ session
       const workspace = new Workspace(resolveWorkspace(opts.workspace));
       const modeRaw = opts.mode?.trim().toLowerCase();
       if (modeRaw && modeRaw !== "long-chat" && modeRaw !== "project") {
-        throw new Error("mode must be long-chat or project");
+        throw new Error("modeにはlong-chatまたはprojectを指定してください");
       }
       const protocolRaw = opts.protocolState?.trim().toUpperCase();
       if (protocolRaw && !PROTOCOL_STATES.includes(protocolRaw as ProtocolState)) {
-        throw new Error(`protocol-state must be one of ${PROTOCOL_STATES.join(", ")}`);
+        throw new Error(`protocol-stateには次のいずれかを指定してください: ${PROTOCOL_STATES.join(", ")}`);
       }
       const waitingRaw = opts.waitingFor?.trim();
       const waitingNorm = waitingRaw
@@ -940,7 +900,7 @@ session
           : waitingRaw.toUpperCase()
         : undefined;
       if (waitingNorm && !WAITING_FOR.includes(waitingNorm as WaitingFor)) {
-        throw new Error(`waiting-for must be one of ${WAITING_FOR.join(", ")}`);
+        throw new Error(`waiting-forには次のいずれかを指定してください: ${WAITING_FOR.join(", ")}`);
       }
       const saved = mergeSession(readSession(workspace.id), {
         url: opts.url,
@@ -974,7 +934,7 @@ session
 
 session
   .command("clear")
-  .description("Forget the current ChatGPT chat (Project binding is kept)")
+  .description("現在のChatGPT会話情報を消去します（Project設定は保持）")
   .option("-w, --workspace <path>")
   .action((opts: { workspace?: string }) => {
     const workspace = new Workspace(resolveWorkspace(opts.workspace));
@@ -986,12 +946,14 @@ session
 
 const prefsCmd = program
   .command("prefs")
-  .description("Remember ChatGPT developer mode and setup choice for this machine");
+  .description("この端末のChatGPT開発者モードと設定方式を保存します");
 
-prefsCmd
-  .command("get", { isDefault: true })
-  .description("Show remembered ChatGPT setup choices (not per workspace)")
-  .option("--json", "machine-readable output", false)
+acceptUnusedWorkspaceOption(
+  prefsCmd
+    .command("get", { isDefault: true })
+    .description("この端末に保存したChatGPT設定を表示します")
+    .option("--json", "機械処理用JSONを出力します", false)
+)
   .action((opts: { json: boolean }) => {
     const prefs = readUiPrefs();
     if (opts.json) {
@@ -1004,20 +966,22 @@ prefsCmd
     else say("設定方法：未選択");
   });
 
-prefsCmd
-  .command("set")
-  .description("Save a ChatGPT setup choice for this machine")
-  .option("--developer-mode", "remember that ChatGPT developer mode is on", false)
-  .option("--setup-mode <mode>", "auto (preview) or manual")
-  .option("--json", "machine-readable output", false)
+acceptUnusedWorkspaceOption(
+  prefsCmd
+    .command("set")
+    .description("この端末のChatGPT設定方式を保存します")
+    .option("--developer-mode", "ChatGPT開発者モードが有効であることを保存します", false)
+    .option("--setup-mode <mode>", "auto（プレビュー）またはmanual")
+    .option("--json", "機械処理用JSONを出力します", false)
+)
   .action((opts: { developerMode: boolean; setupMode?: string; json: boolean }) => {
     try {
       const modeRaw = opts.setupMode?.trim().toLowerCase();
       if (modeRaw && !SETUP_MODES.includes(modeRaw as SetupMode)) {
-        throw new Error(`setup-mode must be one of ${SETUP_MODES.join(", ")}`);
+        throw new Error(`setup-modeには次のいずれかを指定してください: ${SETUP_MODES.join(", ")}`);
       }
       if (!opts.developerMode && !modeRaw) {
-        throw new Error("nothing to save: pass --developer-mode and/or --setup-mode");
+        throw new Error("保存対象がありません。--developer-mode または --setup-mode を指定してください");
       }
       const prefs = mergeUiPrefs({
         developerModeEnabled: opts.developerMode ? true : undefined,
@@ -1037,18 +1001,18 @@ prefsCmd
 
 program
   .command("record", { hidden: true })
-  .description("Record a Codex execution summary (used by the Skill)")
+  .description("Codex実行サマリーを記録します（Skill用）")
   .option("-w, --workspace <path>")
   .requiredOption("--task <id>")
-  .requiredOption("--iteration <n>", "non-negative execution iteration", parseNonNegativeInteger)
-  .option("--changed-files <filesOrCount>", "comma-separated files or a count", "0")
-  .option("--tests <summary>", "e.g. '27 passed'")
+  .requiredOption("--iteration <n>", "0以上の実行回数", parseNonNegativeInteger)
+  .option("--changed-files <filesOrCount>", "カンマ区切りのファイル一覧または件数", "0")
+  .option("--tests <summary>", "例: '27 passed'")
   .option("--exit-status <status>", "ok | failed | blocked", "ok")
   .option("--notes <text>")
-  .option("--command <text>", "command whose output may be offered to ChatGPT")
-  .option("--output <text>", "command output (prefer --output-file for long logs)")
-  .option("--output-file <path>", "read command output from a local file")
-  .option("--exit-code <n>", "numeric exit code of that command", parseInteger)
+  .option("--command <text>", "ChatGPTへ提示可能な出力を生成したコマンド")
+  .option("--output <text>", "コマンド出力（長いログは--output-fileを推奨）")
+  .option("--output-file <path>", "ローカルファイルからコマンド出力を読み込みます")
+  .option("--exit-code <n>", "コマンドの数値終了コード", parseInteger)
   .action(
     (opts: {
       workspace?: string;
@@ -1099,14 +1063,14 @@ program
     }
   );
 
-const tunnelCmd = program.command("tunnel").description("Choose or inspect the public connection for this workspace");
+const tunnelCmd = program.command("tunnel").description("このWorkspaceの公開接続方式を確認・設定します");
 
 tunnelCmd
   .command("status", { isDefault: true })
-  .description("Show whether this workspace still needs a one-time connection choice")
+  .description("公開接続方式の初回選択が必要か確認します")
   .option("-w, --workspace <path>")
-  .option("--zone <domain>", "optional domain, used to preview the stable hostname")
-  .option("--json", "machine-readable output", false)
+  .option("--zone <domain>", "固定ホスト名の確認に使う任意ドメイン")
+  .option("--json", "機械処理用JSONを出力します", false)
   .action((opts: { workspace?: string; zone?: string; json: boolean }) => {
     try {
       const workspace = new Workspace(resolveWorkspace(opts.workspace));
@@ -1125,12 +1089,12 @@ tunnelCmd
 
 tunnelCmd
   .command("choose")
-  .description("Remember quick vs named, and provision a named hostname when asked")
-  .requiredOption("--mode <mode>", "quick or named")
+  .description("一時/固定接続の選択を保存し、必要に応じ固定ホスト名を設定します")
+  .requiredOption("--mode <mode>", "quick または named")
   .option("-w, --workspace <path>")
-  .option("--zone <domain>", "Cloudflare domain for a named hostname")
-  .option("--hostname <hostname>", "override the default c2c-<project>.<zone>")
-  .option("--json", "machine-readable output", false)
+  .option("--zone <domain>", "固定ホスト名に使用するCloudflareドメイン")
+  .option("--hostname <hostname>", "既定のc2c-<project>.<zone>を上書き")
+  .option("--json", "機械処理用JSONを出力します", false)
   .action(async (opts: { mode: string; workspace?: string; zone?: string; hostname?: string; json: boolean }) => {
     const root = resolveWorkspace(opts.workspace);
     try {
@@ -1148,7 +1112,7 @@ tunnelCmd
         return;
       }
       if (mode !== "named") {
-        throw new Error("mode must be quick or named");
+        throw new Error("modeにはquickまたはnamedを指定してください");
       }
       const zone = parseZoneInput(opts.zone ?? "");
       if (!zone) {
@@ -1192,10 +1156,12 @@ tunnelCmd
     }
   });
 
-tunnelCmd
-  .command("login")
-  .description("Open the Cloudflare login window used by a named hostname")
-  .option("--json", "machine-readable output", false)
+acceptUnusedWorkspaceOption(
+  tunnelCmd
+    .command("login")
+    .description("固定ホスト名設定用のCloudflareログインを開始します")
+    .option("--json", "機械処理用JSONを出力します", false)
+)
   .action(async (opts: { json: boolean }) => {
     try {
       if (!opts.json) say(NAMED_LOGIN_PROMPT);

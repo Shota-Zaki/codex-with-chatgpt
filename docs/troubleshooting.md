@@ -1,14 +1,14 @@
-# Troubleshooting
+# トラブルシューティング
 
-First move, always:
+最初に実行する診断:
 
-```
-c2c doctor
+```bash
+c2c doctor -w /Volumes/ZAKKO_DEV/repos
 ```
 
 It checks Node, Workspace, bridge, MCP, OAuth and tunnel — and repairs what it can (restarts the bridge, restarts the tunnel) without asking.
 
-## Common situations
+確認:
 
 ### "Bridgeが実行されていません"
 `c2c start` (or let doctor do it). Bridge logs: `c2c logs`, or verbose: `c2c logs --verbose`.

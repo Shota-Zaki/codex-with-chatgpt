@@ -12,10 +12,12 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsx src/cli/index.ts",
+    "dev": "node --import ./runtime/bootstrap.mjs --import tsx/esm src/cli/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:runtime": "node --test tests/runtime/*.node.mjs",
+    "mac:plan": "node scripts/macos-service.mjs plan"
   },
   "packageManager": "pnpm@11.24.0",
   "dependencies": {

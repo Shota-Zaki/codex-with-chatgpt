@@ -4,16 +4,13 @@
 {
   "schema_version": 1,
   "branch": "work",
-  "base_commit": "27270d957371e246d58324dba17ca5b1272da486",
-  "checkpoint_id": "c2c-single-project-workspace-in-progress-2026-09-17",
-  "pending_changes": [
-    "C2C-006のfull package verificationとproject-state/diff gateが未実施"
-  ],
+  "base_commit": "7171977417e6951417a9884a494a9dbca89e1d47",
+  "checkpoint_id": "origin-work-macos-runtime-adaptation-complete-2026-09-26",
+  "pending_changes": [],
   "resume_notes": [
-    "WindowsではC:\\projectが存在すればcurrent directoryに関係なく初回Workspace利用でApproved Root/Default Rootへ自動登録し、以後のWorkspace commandは同Rootへ解決する。",
-    "C:\\projectに対するBridge/Tunnel/ChatGPT Connectorを1組だけ使用し、配下RepositoryごとのC2C setup/start/connector作成は不要とする。",
-    "Repository選択・Git/Execution identity・Repository confinementは同一Workspace内でRepository単位に維持する。",
-    "Focused single-workspace verificationはpass。npm registryへ到達できるRepository checkout環境でNEXT_WORKのWU-C2C-006-VERIFYを実行する。"
+    "origin/workのMac runtime/privacy/child-process更新を統合済み。取り込んだ先端は89af4fa34952fe58e017b095ae2f793420cf05b0。",
+    "Approved RootとMulti-Repository機能を維持し、Node.js 22.23.3 / pnpm 11.24.0でfrozen install、全242 tests、runtime 49 tests、typecheck/buildを確認済み。",
+    "このcandidateのRequired Verificationとstate/diff gateはEvidence docs/evidence/C2C-007/2026-09-26-origin-work-integration.mdに記録した。実Cloudflare/ChatGPT受入は未実施で従来どおり非必須。"
   ]
 }
 ```

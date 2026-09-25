@@ -17,7 +17,7 @@ describe("tunnel transport protocol", () => {
 
   it("rejects unknown transport values instead of silently falling back", () => {
     expect(() => resolveTunnelProtocol({ C2C_TUNNEL_PROTOCOL: "tcp" })).toThrow(
-      /C2C_TUNNEL_PROTOCOL must be one of auto, quic, http2/
+      /C2C_TUNNEL_PROTOCOLには次のいずれかを指定してください: auto, quic, http2/
     );
   });
 });

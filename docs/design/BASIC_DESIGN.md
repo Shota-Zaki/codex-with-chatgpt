@@ -7,6 +7,8 @@
 - Repository Context = Workspace内のGit/Execution/Task・Evidence識別境界。
 - ChatGPT MCP = read-only data plane。
 - Codex = edit/shell/git mutation/test/buildを担当するexecution plane。
+- macOS常駐Supervisor = 固定された外部Volume/Workspace/Repositoryを検証してから、allowlist環境でBridge workerを起動する運用境界。
+- Runtime privacy bootstrap = 公開Tunnel向け通信をhealth確認だけに制限するプロセス起動時のegress境界。
 
 ## Approved Root resolution
 
@@ -27,6 +29,12 @@ ChatGPTは `workspace_info` でRepository一覧を取得し、ユーザーが指
 `workspace_info`でRepository一覧とstable `repositoryId`を返す。Workspace rootがGit rootなら単一Repository、非Git rootなら直下Git rootを自動検出する。深い階層は `.c2c.json.repositories` で明示する。
 
 複数Repository時のGit/Execution系MCPはselector省略を`REPOSITORY_REQUIRED`で拒否する。read/list/searchはWorkspace全体またはRepository-confinedで使用可能。
+
+## macOS常駐運用
+
+`scripts/macos-service.mjs` は構成確認とLaunchAgent/LaunchDaemon用ファイル生成を行う。実際の監視はユーザーHome内へコピーされたSupervisorが担当し、Volume UUID・mount point・WorkspaceとRepositoryのrealpath・設定済み固定Tunnelを確認後にworkerを起動する。root権限でのsystem LaunchDaemon登録は利用者の確認後に別途行う。
+
+各子プロセスは用途別allowlist環境を受け取る。Runtime bootstrapは外部通信を本文なしhealth確認へ制限し、loopback HTTPと許可対象以外の送信を拒否する。
 
 ## Compatibility
 

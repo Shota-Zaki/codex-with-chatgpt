@@ -1,4 +1,4 @@
-# Architecture
+# アーキテクチャ
 
 ```
              ┌───────────────────────────┐
@@ -31,7 +31,7 @@
              └─────────────────────┘
 ```
 
-## Principles
+## 役割
 
 - **ChatGPT thinks. Codex works.** The bridge never re-implements a coding harness.
 - **Computer Use = control plane**: tiny `[C2C]` state messages (< 1 KB).
@@ -79,7 +79,7 @@ Each repository gets a stable 12-character id derived from its canonical root. T
 
 This model leaves room for future cross-repository Goal/Plan/Review orchestration: an orchestration object can hold an ordered set of repository ids while repository-local Task/Evidence/Git/Execution data remains individually addressable.
 
-## Components (src/)
+ChatGPTは次を担当します。
 
 | Module | Responsibility |
 | --- | --- |
@@ -94,7 +94,7 @@ This model leaves room for future cross-repository Goal/Plan/Review orchestratio
 | `cli/` | `c2c` commands; `--json` for Skill automation. Executable-boundary compatibility accepts leftover `-w` on machine-wide commands |
 | `config/`, `logger/` | OS-convention state dir, secret-redacting logger |
 
-## Request lifecycles
+ChatGPT自身がC2CのMCP経由でshellやGit writeを実行する設計にはしていません。
 
 **MCP call**: ChatGPT → tunnel (HTTPS) → bridge `/mcp` → bearer middleware (401/403) → stateless StreamableHTTP transport → tool handler → optional repository selection → Workspace/repository containment → ignore rules → pagination → outbound sanitizer → JSON result.
 
